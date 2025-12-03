@@ -9,6 +9,7 @@
         "filament/filament": "^3.2",
         "guzzlehttp/guzzle": "^7.2",
         "laravel/framework": "^10.10",
+        "laravel/nova": "5.1.4",
         "laravel/sanctum": "^3.3",
         "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.8",
@@ -65,5 +66,11 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://nova.laravel.com"
+        }
+    ]
 }

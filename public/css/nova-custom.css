@@ -1,0 +1,12 @@
+/* Custom Nova Branding for Cranelift SaaS */
+
+/* Logo styling */
+.dark .logo-svg {
+    filter: brightness(0) invert(1);
+}
+
+/* Custom primary color to match frontend blue theme */
+:root {
+    --primary: 37 99 235; /* Blue-600 */
+    --primary-dark: 29 78 216; /* Blue-700 */
+}

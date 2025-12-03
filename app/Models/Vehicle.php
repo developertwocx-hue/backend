@@ -14,30 +14,11 @@ class Vehicle extends Model
     protected $fillable = [
         'tenant_id',
         'vehicle_type_id',
-        'name',
-        'make',
-        'model',
-        'year',
-        'registration_number',
-        'vin',
-        'serial_number',
-        'capacity',
-        'capacity_unit',
-        'specifications',
         'status',
-        'purchase_date',
-        'purchase_price',
-        'last_service_date',
-        'next_service_date',
-        'notes',
     ];
 
     protected $casts = [
-        'capacity' => 'decimal:2',
-        'purchase_price' => 'decimal:2',
-        'purchase_date' => 'date',
-        'last_service_date' => 'date',
-        'next_service_date' => 'date',
+        //
     ];
 
     public function tenant()
@@ -53,5 +34,10 @@ class Vehicle extends Model
     public function documents()
     {
         return $this->hasMany(VehicleDocument::class);
+    }
+
+    public function fieldValues()
+    {
+        return $this->hasMany(VehicleFieldValue::class);
     }
 }

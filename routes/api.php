@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\VehicleTypeController;
+use App\Http\Controllers\Api\VehicleTypeFieldController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleDocumentController;
 
@@ -50,10 +51,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tenant', [TenantController::class, 'getCurrentTenant']);
     Route::put('/tenant', [TenantController::class, 'updateTenant']);
 
-    // Vehicle Types (Admin only can create/update/delete)
-    Route::apiResource('vehicle-types', VehicleTypeController::class);
+    // Vehicle Types (Global - read-only for tenants, managed by superadmin in Nova)
+    Route::get('/vehicle-types', [VehicleTypeController::class, 'index']);
+    Route::get('/vehicle-types/{id}', [VehicleTypeController::class, 'show']);
+    Route::get('/vehicle-types/{id}/fields', [VehicleTypeController::class, 'fields']);
 
-    // Vehicles (All authenticated users can view, Admin can create/update/delete)
+    // Vehicle Type Fields (Custom fields management for tenants)
+    Route::apiResource('vehicle-type-fields', VehicleTypeFieldController::class);
+
+    // Vehicles (Full CRUD with dynamic field values)
     Route::apiResource('vehicles', VehicleController::class);
 
     // Vehicle Documents

@@ -9,10 +9,9 @@ use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class VehicleType extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToTenant;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'tenant_id',
         'name',
         'description',
         'is_active',
@@ -27,8 +26,18 @@ class VehicleType extends Model
         return $this->hasMany(Vehicle::class);
     }
 
-    public function tenant()
+    public function fields()
     {
-        return $this->belongsTo(Tenant::class);
+        return $this->hasMany(VehicleTypeField::class);
+    }
+
+    public function defaultFields()
+    {
+        return $this->hasMany(VehicleTypeField::class)->whereNull('tenant_id');
+    }
+
+    public function customFields($tenantId)
+    {
+        return $this->hasMany(VehicleTypeField::class)->where('tenant_id', $tenantId);
     }
 }
