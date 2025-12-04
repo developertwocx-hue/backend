@@ -55,8 +55,12 @@ class AuthController extends ApiController
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Load tenant relationship
+        $user->load('tenant');
+
         return $this->successResponse([
             'user' => $user,
+            'tenant' => $user->tenant,
             'token' => $token,
         ], 'Login successful');
     }

@@ -116,7 +116,6 @@ class Vehicle extends Resource
 
             foreach ($vehicleTypes as $vehicleType) {
                 $typeFields = \App\Models\VehicleTypeField::where('vehicle_type_id', $vehicleType->id)
-                    ->whereNull('tenant_id') // Only default fields
                     ->where('is_active', true)
                     ->orderBy('sort_order')
                     ->get();
@@ -127,9 +126,27 @@ class Vehicle extends Resource
                         // Hide from index - only show on detail/forms
                         $field->hideFromIndex();
 
-                        // Make field dependent on vehicle_type selection
-                        $field->dependsOn(['vehicleType'], function ($field, $request, $formData) use ($vehicleType, $typeField) {
-                            if (isset($formData->vehicleType) && $formData->vehicleType == $vehicleType->id) {
+                        // Make field dependent on both tenant AND vehicle_type selection
+                        $field->dependsOn(['tenant', 'vehicleType'], function ($field, $request, $formData) use ($vehicleType, $typeField) {
+                            $selectedTenantId = $formData->tenant ?? null;
+                            $selectedVehicleType = $formData->vehicleType ?? null;
+
+                            // Check if this field should be shown
+                            $shouldShow = false;
+
+                            // Show if vehicle type matches
+                            if ($selectedVehicleType == $vehicleType->id) {
+                                // Show default fields (tenant_id = NULL) always
+                                if ($typeField->tenant_id === null) {
+                                    $shouldShow = true;
+                                }
+                                // Show custom fields only if they belong to the selected tenant
+                                elseif ($selectedTenantId && $typeField->tenant_id == $selectedTenantId) {
+                                    $shouldShow = true;
+                                }
+                            }
+
+                            if ($shouldShow) {
                                 $field->show();
                                 // Re-apply rules only when visible
                                 if ($typeField->is_required) {
@@ -153,12 +170,19 @@ class Vehicle extends Resource
                 }
             }
         } else {
-            // On edit: load fields for this vehicle's type only
+            // On edit: load fields for this vehicle's type and tenant only
             $vehicleTypeId = $this->vehicle_type_id;
+            $tenantId = $this->tenant_id;
+
             if ($vehicleTypeId) {
                 $typeFields = \App\Models\VehicleTypeField::where('vehicle_type_id', $vehicleTypeId)
-                    ->whereNull('tenant_id') // Only default fields
                     ->where('is_active', true)
+                    ->where(function($query) use ($tenantId) {
+                        // Show default fields (tenant_id = NULL)
+                        $query->whereNull('tenant_id')
+                              // OR show custom fields belonging to this vehicle's tenant
+                              ->orWhere('tenant_id', $tenantId);
+                    })
                     ->orderBy('sort_order')
                     ->get();
 
@@ -312,10 +336,15 @@ class Vehicle extends Resource
             return;
         }
 
-        // Get all default fields (tenant_id = NULL) for this vehicle type
+        // Get fields for this vehicle type and tenant
         $typeFields = \App\Models\VehicleTypeField::where('vehicle_type_id', $model->vehicle_type_id)
-            ->whereNull('tenant_id') // Only default fields for Nova
             ->where('is_active', true)
+            ->where(function($query) use ($model) {
+                // Get default fields (tenant_id = NULL)
+                $query->whereNull('tenant_id')
+                      // OR get custom fields belonging to this vehicle's tenant
+                      ->orWhere('tenant_id', $model->tenant_id);
+            })
             ->get();
 
         foreach ($typeFields as $typeField) {
