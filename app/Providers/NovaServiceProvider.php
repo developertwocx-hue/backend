@@ -30,6 +30,7 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
             \App\Nova\VehicleType::class,
             \App\Nova\VehicleTypeField::class,
             \App\Nova\Vehicle::class,
+            \App\Nova\DocumentType::class,
             \App\Nova\VehicleDocument::class,
         ]);
 
@@ -57,6 +58,10 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
                 \Laravel\Nova\Menu\MenuSection::make('Vehicles')
                     ->path('/resources/vehicles')
                     ->icon('truck'),
+
+                \Laravel\Nova\Menu\MenuSection::make('Document Types')
+                    ->path('/resources/document-types')
+                    ->icon('folder-open'),
 
                 \Laravel\Nova\Menu\MenuSection::make('Vehicle Documents')
                     ->path('/resources/vehicle-documents')
@@ -145,6 +150,7 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
             \App\Nova\VehicleType::class,
             \App\Nova\VehicleTypeField::class,
             \App\Nova\Vehicle::class,
+            \App\Nova\DocumentType::class,
             \App\Nova\VehicleDocument::class,
         ];
     }

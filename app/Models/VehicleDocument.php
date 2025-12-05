@@ -14,7 +14,8 @@ class VehicleDocument extends Model
     protected $fillable = [
         'tenant_id',
         'vehicle_id',
-        'document_type',
+        'document_type_id',
+        'document_type', // Legacy field, will be deprecated
         'document_name',
         'document_number',
         'file_path',
@@ -46,5 +47,28 @@ class VehicleDocument extends Model
     public function uploadedBy()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    public function documentType()
+    {
+        return $this->belongsTo(DocumentType::class);
+    }
+
+    /**
+     * Boot method to add model event listeners
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Auto-fill legacy document_type field from DocumentType relationship
+        static::saving(function ($vehicleDocument) {
+            if ($vehicleDocument->document_type_id && !$vehicleDocument->document_type) {
+                $documentType = DocumentType::find($vehicleDocument->document_type_id);
+                if ($documentType) {
+                    $vehicleDocument->document_type = $documentType->name;
+                }
+            }
+        });
     }
 }

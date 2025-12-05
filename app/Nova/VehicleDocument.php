@@ -61,27 +61,70 @@ class VehicleDocument extends Resource
             BelongsTo::make('Tenant')
                 ->sortable()
                 ->rules('required')
-                ->withoutTrashed(),
+                ->withoutTrashed()
+                ->searchable(),
 
             BelongsTo::make('Vehicle')
                 ->sortable()
                 ->rules('required')
-                ->withoutTrashed(),
+                ->withoutTrashed()
+                ->searchable()
+                ->dependsOn(['tenant'], function (BelongsTo $field, NovaRequest $request, $formData) {
+                    // Always apply the query filter based on selected tenant
+                    $field->relatableQueryUsing(function (NovaRequest $request, $query) use ($formData) {
+                        if (!empty($formData->tenant)) {
+                            return $query->where('tenant_id', $formData->tenant);
+                        }
+                        return $query;
+                    });
+                }),
 
-            Select::make('Document Type', 'document_type')
-                ->options([
-                    'registration' => 'Registration',
-                    'insurance' => 'Insurance',
-                    'inspection' => 'Inspection',
-                    'license' => 'License',
-                    'permit' => 'Permit',
-                    'warranty' => 'Warranty',
-                    'maintenance' => 'Maintenance Record',
-                    'other' => 'Other',
-                ])
-                ->displayUsingLabels()
+            BelongsTo::make('Document Type', 'documentType', DocumentType::class)
                 ->sortable()
-                ->rules('required'),
+                ->rules('required')
+                ->withoutTrashed()
+                ->searchable()
+                ->help('Select a vehicle first to filter document types')
+                ->displayUsing(function ($documentType) {
+                    return $documentType->name . ' (' . $documentType->scope_type . ')';
+                })
+                ->relatableQueryUsing(function (NovaRequest $request, $query) {
+                    // Get vehicle_id from request
+                    $vehicleId = $request->get('vehicle') ?? $request->get('viaResourceId');
+
+                    if ($vehicleId) {
+                        $vehicle = \App\Models\Vehicle::find($vehicleId);
+
+                        if ($vehicle) {
+                            return $query->where('is_active', true)
+                                ->where(function ($q) use ($vehicle) {
+                                    // Global types (no tenant, no vehicle type)
+                                    $q->where(function ($subQ) {
+                                        $subQ->whereNull('tenant_id')->whereNull('vehicle_type_id');
+                                    })
+                                    // Vehicle-type specific (no tenant, matching vehicle type)
+                                    ->orWhere(function ($subQ) use ($vehicle) {
+                                        $subQ->whereNull('tenant_id')->where('vehicle_type_id', $vehicle->vehicle_type_id);
+                                    })
+                                    // Tenant custom for all types (matching tenant, no vehicle type)
+                                    ->orWhere(function ($subQ) use ($vehicle) {
+                                        $subQ->where('tenant_id', $vehicle->tenant_id)->whereNull('vehicle_type_id');
+                                    })
+                                    // Tenant custom for specific type (matching tenant and vehicle type)
+                                    ->orWhere(function ($subQ) use ($vehicle) {
+                                        $subQ->where('tenant_id', $vehicle->tenant_id)->where('vehicle_type_id', $vehicle->vehicle_type_id);
+                                    });
+                                })
+                                ->orderBy('sort_order')
+                                ->orderBy('name');
+                        }
+                    }
+
+                    // Default: show all active document types
+                    return $query->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->orderBy('name');
+                }),
 
             Text::make('Document Name', 'document_name')
                 ->sortable()

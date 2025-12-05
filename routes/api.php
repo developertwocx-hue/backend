@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\VehicleTypeController;
 use App\Http\Controllers\Api\VehicleTypeFieldController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleDocumentController;
+use App\Http\Controllers\Api\DocumentTypeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -62,7 +63,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Vehicles (Full CRUD with dynamic field values)
     Route::apiResource('vehicles', VehicleController::class);
 
+    // Document Types (Three-level system: Global, Vehicle-Type Specific, Tenant Custom)
+    Route::get('/document-types', [DocumentTypeController::class, 'index']);
+    Route::get('/document-types/{id}', [DocumentTypeController::class, 'show']);
+    Route::post('/document-types', [DocumentTypeController::class, 'store']); // Tenant creates custom
+    Route::put('/document-types/{id}', [DocumentTypeController::class, 'update']); // Tenant updates own
+    Route::delete('/document-types/{id}', [DocumentTypeController::class, 'destroy']); // Tenant deletes own
+    Route::get('/vehicles/{vehicleId}/document-types', [DocumentTypeController::class, 'forVehicle']);
+
     // Vehicle Documents
     Route::apiResource('vehicles.documents', VehicleDocumentController::class);
-    Route::get('/documents', [VehicleDocumentController::class, 'index']);
+    Route::get('/documents', [VehicleDocumentController::class, 'allDocuments']);
 });
