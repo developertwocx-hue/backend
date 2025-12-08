@@ -182,8 +182,9 @@ class DocumentType extends Resource
      */
     public static function authorizedToCreate(Request $request)
     {
-        // Only superadmin can create document types in Nova
-        return $request->user() && $request->user()->role === 'superadmin';
+        // Temporarily allow all authenticated users to create document types in Nova
+        // TODO: Restrict to superadmin only in production
+        return $request->user() !== null;
     }
 
     /**
@@ -191,9 +192,9 @@ class DocumentType extends Resource
      */
     public function authorizedToUpdate(Request $request)
     {
-        // Superadmin can update all
-        // Tenants can only update their own custom types (via API, not Nova)
-        return $request->user() && $request->user()->role === 'superadmin';
+        // Temporarily allow all authenticated users to update document types in Nova
+        // TODO: Restrict to superadmin only in production
+        return $request->user() !== null;
     }
 
     /**
@@ -201,8 +202,9 @@ class DocumentType extends Resource
      */
     public function authorizedToDelete(Request $request)
     {
-        // Superadmin can delete all
+        // Temporarily allow all authenticated users to delete document types in Nova
+        // TODO: Restrict to superadmin only in production
         // Don't allow deleting if it's being used by documents
-        return $request->user() && $request->user()->role === 'superadmin' && $this->vehicleDocuments()->count() === 0;
+        return $request->user() !== null && $this->vehicleDocuments()->count() === 0;
     }
 }
