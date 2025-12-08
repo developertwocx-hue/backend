@@ -110,8 +110,9 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
     protected function gate(): void
     {
         Gate::define('viewNova', function (?User $user) {
-            // Allow superadmin and admin roles to access Nova
-            return $user && in_array($user->role, ['superadmin', 'admin']);
+            // Temporarily allow all authenticated users to access Nova
+            // TODO: Restrict to admin/superadmin only in production
+            return $user !== null;
         });
     }
 
