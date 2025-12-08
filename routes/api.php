@@ -30,6 +30,9 @@ Route::get('/health', function () {
     ]);
 });
 
+// Public vehicle access (QR code scanning)
+Route::get('/public/vehicles/{token}', [App\Http\Controllers\Api\PublicVehicleController::class, 'show']);
+
 // Tenant/Business Registration
 Route::post('/tenants/register', [TenantController::class, 'registerBusiness']);
 
@@ -61,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('vehicle-type-fields', VehicleTypeFieldController::class);
 
     // Vehicles (Full CRUD with dynamic field values)
+    Route::get('/vehicles/autocomplete/names', [VehicleController::class, 'autocompleteNames']);
     Route::apiResource('vehicles', VehicleController::class);
 
     // Document Types (Three-level system: Global, Vehicle-Type Specific, Tenant Custom)
@@ -74,4 +78,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Vehicle Documents
     Route::apiResource('vehicles.documents', VehicleDocumentController::class);
     Route::get('/documents', [VehicleDocumentController::class, 'allDocuments']);
+    Route::get('/documents/autocomplete/names', [VehicleDocumentController::class, 'autocompleteNames']);
+    Route::get('/documents/autocomplete/numbers', [VehicleDocumentController::class, 'autocompleteNumbers']);
 });

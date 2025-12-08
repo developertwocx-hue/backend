@@ -23,20 +23,57 @@ class VehicleController extends ApiController
             ->where('tenant_id', $user->tenant_id);
 
         // Filter by vehicle type if provided
-        if ($request->has('vehicle_type_id')) {
+        if ($request->has('vehicle_type_id') && $request->vehicle_type_id) {
             $query->where('vehicle_type_id', $request->vehicle_type_id);
         }
 
         // Filter by status if provided
-        if ($request->has('status')) {
+        if ($request->has('status') && $request->status) {
             $query->where('status', $request->status);
+        }
+
+        // Filter by date range if provided
+        if ($request->has('date_from') && $request->date_from) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->has('date_to') && $request->date_to) {
+            $query->whereDate('created_at', '<=', $request->date_to);
         }
 
         if ($includeFieldValues) {
             $query->with(['fieldValues.field']);
         }
 
+        // Get initial results
         $vehicles = $query->latest()->get();
+
+        // Filter by vehicle name if provided (must be done after loading field values)
+        if ($request->has('vehicle_name') && $request->vehicle_name) {
+            $searchName = strtolower($request->vehicle_name);
+
+            // Find name field IDs
+            $nameFieldIds = VehicleTypeField::where('key', 'name')
+                ->where('is_active', true)
+                ->where(function($q) use ($user) {
+                    $q->whereNull('tenant_id')
+                      ->orWhere('tenant_id', $user->tenant_id);
+                })
+                ->pluck('id');
+
+            // Filter vehicles by name field value
+            $vehicles = $vehicles->filter(function($vehicle) use ($nameFieldIds, $searchName) {
+                $nameField = $vehicle->fieldValues->first(function($fv) use ($nameFieldIds) {
+                    return $nameFieldIds->contains($fv->vehicle_type_field_id);
+                });
+
+                if (!$nameField) {
+                    return false;
+                }
+
+                return stripos($nameField->value, $searchName) !== false;
+            })->values();
+        }
 
         return $this->successResponse($vehicles, 'Vehicles retrieved successfully');
     }
@@ -183,6 +220,45 @@ class VehicleController extends ApiController
         $vehicle->delete();
 
         return $this->successResponse(null, 'Vehicle deleted successfully');
+    }
+
+    /**
+     * Get autocomplete suggestions for vehicle names
+     * GET /api/vehicles/autocomplete/names?query=xxx
+     */
+    public function autocompleteNames(Request $request)
+    {
+        $tenantId = $request->user()->tenant_id;
+        $query = $request->input('query', '');
+
+        if (strlen($query) < 2) {
+            return $this->successResponse([]);
+        }
+
+        // Find the name field IDs for this tenant's vehicle types
+        $nameFieldIds = VehicleTypeField::where('key', 'name')
+            ->where('is_active', true)
+            ->where(function($q) use ($tenantId) {
+                $q->whereNull('tenant_id')
+                  ->orWhere('tenant_id', $tenantId);
+            })
+            ->pluck('id');
+
+        // Get vehicle IDs that belong to this tenant
+        $vehicleIds = Vehicle::where('tenant_id', $tenantId)->pluck('id');
+
+        // Search for matching vehicle names (ILIKE for case-insensitive search in PostgreSQL)
+        $suggestions = VehicleFieldValue::whereIn('vehicle_id', $vehicleIds)
+            ->whereIn('vehicle_type_field_id', $nameFieldIds)
+            ->where('value', 'ILIKE', '%' . $query . '%')
+            ->select('value')
+            ->distinct()
+            ->limit(10)
+            ->pluck('value')
+            ->values() // Re-index array to ensure proper JSON array format
+            ->toArray();
+
+        return $this->successResponse($suggestions);
     }
 
     /**

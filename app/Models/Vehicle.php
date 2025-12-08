@@ -15,7 +15,22 @@ class Vehicle extends Model
         'tenant_id',
         'vehicle_type_id',
         'status',
+        'qr_code_token',
     ];
+
+    /**
+     * Boot function to auto-generate QR token
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($vehicle) {
+            if (empty($vehicle->qr_code_token)) {
+                $vehicle->qr_code_token = \Illuminate\Support\Str::random(32);
+            }
+        });
+    }
 
     protected $casts = [
         //

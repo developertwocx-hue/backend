@@ -183,7 +183,7 @@ class DocumentType extends Resource
     public static function authorizedToCreate(Request $request)
     {
         // Only superadmin can create document types in Nova
-        return $request->user()->role === 'superadmin';
+        return $request->user() && $request->user()->role === 'superadmin';
     }
 
     /**
@@ -193,7 +193,7 @@ class DocumentType extends Resource
     {
         // Superadmin can update all
         // Tenants can only update their own custom types (via API, not Nova)
-        return $request->user()->role === 'superadmin';
+        return $request->user() && $request->user()->role === 'superadmin';
     }
 
     /**
@@ -203,6 +203,6 @@ class DocumentType extends Resource
     {
         // Superadmin can delete all
         // Don't allow deleting if it's being used by documents
-        return $request->user()->role === 'superadmin' && $this->vehicleDocuments()->count() === 0;
+        return $request->user() && $request->user()->role === 'superadmin' && $this->vehicleDocuments()->count() === 0;
     }
 }

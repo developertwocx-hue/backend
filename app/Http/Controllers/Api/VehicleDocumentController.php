@@ -39,12 +39,105 @@ class VehicleDocumentController extends ApiController
     {
         $tenantId = $request->user()->tenant_id;
 
-        $documents = VehicleDocument::where('tenant_id', $tenantId)
-            ->with(['documentType', 'vehicle', 'uploadedBy'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = VehicleDocument::where('tenant_id', $tenantId)
+            ->with(['documentType', 'vehicle', 'uploadedBy']);
+
+        // Apply filters if provided
+        if ($request->has('document_name') && $request->document_name) {
+            $query->where('document_name', 'LIKE', '%' . $request->document_name . '%');
+        }
+
+        if ($request->has('document_number') && $request->document_number) {
+            $query->where('document_number', 'LIKE', '%' . $request->document_number . '%');
+        }
+
+        if ($request->has('vehicle_id') && $request->vehicle_id) {
+            $query->where('vehicle_id', $request->vehicle_id);
+        }
+
+        if ($request->has('document_type_id') && $request->document_type_id) {
+            $query->where('document_type_id', $request->document_type_id);
+        }
+
+        if ($request->has('status') && $request->status) {
+            $now = now();
+            switch ($request->status) {
+                case 'expired':
+                    $query->where('is_expired', true);
+                    break;
+                case 'expiring':
+                    $query->where('is_expired', false)
+                          ->whereNotNull('expiry_date')
+                          ->whereRaw('DATEDIFF(expiry_date, ?) <= 30', [$now])
+                          ->whereRaw('DATEDIFF(expiry_date, ?) >= 0', [$now]);
+                    break;
+                case 'valid':
+                    $query->where('is_expired', false)
+                          ->where(function($q) use ($now) {
+                              $q->whereNull('expiry_date')
+                                ->orWhereRaw('DATEDIFF(expiry_date, ?) > 30', [$now]);
+                          });
+                    break;
+                case 'no_expiry':
+                    $query->whereNull('expiry_date');
+                    break;
+            }
+        }
+
+        $documents = $query->orderBy('created_at', 'desc')->get();
 
         return $this->successResponse($documents);
+    }
+
+    /**
+     * Get autocomplete suggestions for document names
+     * GET /api/documents/autocomplete/names?query=xxx
+     */
+    public function autocompleteNames(Request $request)
+    {
+        $tenantId = $request->user()->tenant_id;
+        $query = $request->input('query', '');
+
+        if (strlen($query) < 2) {
+            return $this->successResponse([]);
+        }
+
+        $suggestions = VehicleDocument::where('tenant_id', $tenantId)
+            ->where('document_name', 'ILIKE', '%' . $query . '%')
+            ->select('document_name')
+            ->distinct()
+            ->limit(10)
+            ->pluck('document_name')
+            ->values()
+            ->toArray();
+
+        return $this->successResponse($suggestions);
+    }
+
+    /**
+     * Get autocomplete suggestions for document numbers
+     * GET /api/documents/autocomplete/numbers?query=xxx
+     */
+    public function autocompleteNumbers(Request $request)
+    {
+        $tenantId = $request->user()->tenant_id;
+        $query = $request->input('query', '');
+
+        if (strlen($query) < 2) {
+            return $this->successResponse([]);
+        }
+
+        $suggestions = VehicleDocument::where('tenant_id', $tenantId)
+            ->whereNotNull('document_number')
+            ->where('document_number', 'ILIKE', '%' . $query . '%')
+            ->select('document_number')
+            ->distinct()
+            ->limit(10)
+            ->pluck('document_number')
+            ->values()
+            ->toArray();
+
+        return $this->successResponse($suggestions);
     }
 
     /**
