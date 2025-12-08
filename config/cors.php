@@ -26,6 +26,7 @@ return [
 
     'allowed_origins_patterns' => [
         '/\.vercel\.app$/',  // Allow all Vercel preview deployments
+        '/\.trycloudflare\.com$/',  // Allow Cloudflare tunnels
     ],
 
     'allowed_headers' => ['*'],
