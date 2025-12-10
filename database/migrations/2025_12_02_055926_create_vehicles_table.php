@@ -34,7 +34,7 @@ return new class extends Migration
             $table->text('specifications')->nullable();
 
             // Status and Maintenance
-            $table->enum('status', ['active', 'maintenance', 'inactive', 'sold'])->default('active');
+            $table->enum('status', ['active', 'maintenance', 'inactive'])->default('active');
             $table->date('purchase_date')->nullable();
             $table->decimal('purchase_price', 15, 2)->nullable();
             $table->date('last_service_date')->nullable();

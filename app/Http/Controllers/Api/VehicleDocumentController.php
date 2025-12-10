@@ -40,7 +40,7 @@ class VehicleDocumentController extends ApiController
         $tenantId = $request->user()->tenant_id;
 
         $query = VehicleDocument::where('tenant_id', $tenantId)
-            ->with(['documentType', 'vehicle', 'uploadedBy']);
+            ->with(['documentType', 'vehicle.fieldValues', 'vehicle.vehicleType', 'uploadedBy']);
 
         // Apply filters if provided
         if ($request->has('document_name') && $request->document_name) {
@@ -61,21 +61,24 @@ class VehicleDocumentController extends ApiController
 
         if ($request->has('status') && $request->status) {
             $now = now();
+            $thirtyDaysFromNow = now()->addDays(30);
             switch ($request->status) {
                 case 'expired':
                     $query->where('is_expired', true);
                     break;
                 case 'expiring':
+                    // Documents expiring within next 30 days (PostgreSQL compatible)
                     $query->where('is_expired', false)
                           ->whereNotNull('expiry_date')
-                          ->whereRaw('DATEDIFF(expiry_date, ?) <= 30', [$now])
-                          ->whereRaw('DATEDIFF(expiry_date, ?) >= 0', [$now]);
+                          ->where('expiry_date', '>=', $now)
+                          ->where('expiry_date', '<=', $thirtyDaysFromNow);
                     break;
                 case 'valid':
+                    // Documents that are valid (not expired and either no expiry or expiring after 30 days)
                     $query->where('is_expired', false)
-                          ->where(function($q) use ($now) {
+                          ->where(function($q) use ($thirtyDaysFromNow) {
                               $q->whereNull('expiry_date')
-                                ->orWhereRaw('DATEDIFF(expiry_date, ?) > 30', [$now]);
+                                ->orWhere('expiry_date', '>', $thirtyDaysFromNow);
                           });
                     break;
                 case 'no_expiry':
@@ -87,6 +90,89 @@ class VehicleDocumentController extends ApiController
         $documents = $query->orderBy('created_at', 'desc')->get();
 
         return $this->successResponse($documents);
+    }
+
+    /**
+     * Get document statistics
+     * GET /api/documents/stats
+     */
+    public function stats(Request $request)
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        $query = VehicleDocument::where('tenant_id', $tenantId);
+
+        // Apply same filters as allDocuments method
+        if ($request->has('document_name') && $request->document_name) {
+            $query->where('document_name', 'ILIKE', '%' . $request->document_name . '%');
+        }
+
+        if ($request->has('document_number') && $request->document_number) {
+            $query->where('document_number', 'ILIKE', '%' . $request->document_number . '%');
+        }
+
+        if ($request->has('vehicle_id') && $request->vehicle_id) {
+            $query->where('vehicle_id', $request->vehicle_id);
+        }
+
+        if ($request->has('document_type_id') && $request->document_type_id) {
+            $query->where('document_type_id', $request->document_type_id);
+        }
+
+        if ($request->has('status') && $request->status) {
+            $now = now();
+            $thirtyDaysFromNow = now()->addDays(30);
+            switch ($request->status) {
+                case 'expired':
+                    $query->where('is_expired', true);
+                    break;
+                case 'expiring':
+                    $query->where('is_expired', false)
+                          ->whereNotNull('expiry_date')
+                          ->where('expiry_date', '>=', $now)
+                          ->where('expiry_date', '<=', $thirtyDaysFromNow);
+                    break;
+                case 'valid':
+                    $query->where('is_expired', false)
+                          ->where(function($q) use ($thirtyDaysFromNow) {
+                              $q->whereNull('expiry_date')
+                                ->orWhere('expiry_date', '>', $thirtyDaysFromNow);
+                          });
+                    break;
+                case 'no_expiry':
+                    $query->whereNull('expiry_date');
+                    break;
+            }
+        }
+
+        // Calculate stats
+        $now = now();
+        $thirtyDaysFromNow = now()->addDays(30);
+
+        $total = $query->count();
+        $expired = (clone $query)->where('is_expired', true)->count();
+        $expiring = (clone $query)
+            ->where('is_expired', false)
+            ->whereNotNull('expiry_date')
+            ->where('expiry_date', '>=', $now)
+            ->where('expiry_date', '<=', $thirtyDaysFromNow)
+            ->count();
+        $valid = (clone $query)
+            ->where('is_expired', false)
+            ->where(function($q) use ($thirtyDaysFromNow) {
+                $q->whereNull('expiry_date')
+                  ->orWhere('expiry_date', '>', $thirtyDaysFromNow);
+            })
+            ->count();
+        $noExpiry = (clone $query)->whereNull('expiry_date')->count();
+
+        return $this->successResponse([
+            'total' => $total,
+            'expired' => $expired,
+            'expiring' => $expiring,
+            'valid' => $valid,
+            'noExpiry' => $noExpiry,
+        ]);
     }
 
     /**
@@ -324,5 +410,46 @@ class VehicleDocumentController extends ApiController
         $document->delete();
 
         return $this->successResponse(null, 'Document deleted successfully');
+    }
+
+    /**
+     * Bulk delete documents
+     * POST /api/documents/bulk-delete
+     */
+    public function bulkDelete(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:vehicle_documents,id',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse('Validation failed', 422, $validator->errors());
+        }
+
+        // Get documents that belong to the user's tenant
+        $documents = VehicleDocument::where('tenant_id', $user->tenant_id)
+            ->whereIn('id', $request->ids)
+            ->get();
+
+        // Delete files from storage
+        foreach ($documents as $document) {
+            if ($document->file_path) {
+                Storage::disk('public')->delete($document->file_path);
+            }
+        }
+
+        // Delete documents
+        $deletedCount = $documents->count();
+        VehicleDocument::where('tenant_id', $user->tenant_id)
+            ->whereIn('id', $request->ids)
+            ->delete();
+
+        return $this->successResponse(
+            ['deleted_count' => $deletedCount],
+            "{$deletedCount} document(s) deleted successfully"
+        );
     }
 }

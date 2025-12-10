@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\VehicleTypeFieldController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleDocumentController;
 use App\Http\Controllers\Api\DocumentTypeController;
+use App\Http\Controllers\Api\VehicleImportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,6 +47,7 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/user', [AuthController::class, 'user']);
+        Route::post('/change-password', [AuthController::class, 'changePassword']);
     });
 });
 
@@ -64,8 +66,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('vehicle-type-fields', VehicleTypeFieldController::class);
 
     // Vehicles (Full CRUD with dynamic field values)
+    Route::get('/vehicles/stats', [VehicleController::class, 'stats']);
     Route::get('/vehicles/autocomplete/names', [VehicleController::class, 'autocompleteNames']);
+    Route::post('/vehicles/bulk-delete', [VehicleController::class, 'bulkDelete']);
     Route::apiResource('vehicles', VehicleController::class);
+
+    // Vehicle Import
+    Route::get('/vehicle-types/{id}/import-template', [VehicleImportController::class, 'generateTemplate']);
+    Route::post('/vehicles/import/preview', [VehicleImportController::class, 'preview']);
+    Route::post('/vehicles/import', [VehicleImportController::class, 'import']);
 
     // Document Types (Three-level system: Global, Vehicle-Type Specific, Tenant Custom)
     Route::get('/document-types', [DocumentTypeController::class, 'index']);
@@ -78,6 +87,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Vehicle Documents
     Route::apiResource('vehicles.documents', VehicleDocumentController::class);
     Route::get('/documents', [VehicleDocumentController::class, 'allDocuments']);
+    Route::get('/documents/stats', [VehicleDocumentController::class, 'stats']);
+    Route::post('/documents/bulk-delete', [VehicleDocumentController::class, 'bulkDelete']);
     Route::get('/documents/autocomplete/names', [VehicleDocumentController::class, 'autocompleteNames']);
     Route::get('/documents/autocomplete/numbers', [VehicleDocumentController::class, 'autocompleteNumbers']);
 });

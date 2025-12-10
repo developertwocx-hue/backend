@@ -13,6 +13,7 @@
         "laravel/sanctum": "^3.3",
         "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.8",
+        "phpoffice/phpspreadsheet": "*",
         "stancl/tenancy": "^3.9"
     },
     "require-dev": {

@@ -113,7 +113,7 @@ class VehicleController extends ApiController
         // Validate basic vehicle data
         $validator = Validator::make($request->all(), [
             'vehicle_type_id' => 'required|exists:vehicle_types,id',
-            'status' => 'required|in:active,maintenance,inactive,sold',
+            'status' => 'required|in:active,maintenance,inactive',
             'field_values' => 'nullable|array',
         ]);
 
@@ -166,7 +166,7 @@ class VehicleController extends ApiController
         // Validate
         $validator = Validator::make($request->all(), [
             'vehicle_type_id' => 'sometimes|exists:vehicle_types,id',
-            'status' => 'sometimes|in:active,maintenance,inactive,sold',
+            'status' => 'sometimes|in:active,maintenance,inactive',
             'field_values' => 'nullable|array',
         ]);
 
@@ -220,6 +220,93 @@ class VehicleController extends ApiController
         $vehicle->delete();
 
         return $this->successResponse(null, 'Vehicle deleted successfully');
+    }
+
+    /**
+     * Bulk delete vehicles
+     * POST /api/vehicles/bulk-delete
+     */
+    public function bulkDelete(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:vehicles,id',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse('Validation failed', 422, $validator->errors());
+        }
+
+        // Delete only vehicles that belong to the user's tenant
+        $deletedCount = Vehicle::where('tenant_id', $user->tenant_id)
+            ->whereIn('id', $request->ids)
+            ->delete();
+
+        return $this->successResponse(
+            ['deleted_count' => $deletedCount],
+            "{$deletedCount} vehicle(s) deleted successfully"
+        );
+    }
+
+    /**
+     * Get vehicle statistics
+     * GET /api/vehicles/stats
+     */
+    public function stats(Request $request)
+    {
+        $user = $request->user();
+
+        $query = Vehicle::where('tenant_id', $user->tenant_id);
+
+        // Apply same filters as index method
+        if ($request->has('vehicle_type_id') && $request->vehicle_type_id) {
+            $query->where('vehicle_type_id', $request->vehicle_type_id);
+        }
+
+        if ($request->has('status') && $request->status) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('date_from') && $request->date_from) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->has('date_to') && $request->date_to) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        // Get all vehicles for name filtering if needed
+        if ($request->has('vehicle_name') && $request->vehicle_name) {
+            $searchName = strtolower($request->vehicle_name);
+            $nameFieldIds = VehicleTypeField::where('key', 'name')
+                ->where('is_active', true)
+                ->where(function($q) use ($user) {
+                    $q->whereNull('tenant_id')
+                      ->orWhere('tenant_id', $user->tenant_id);
+                })
+                ->pluck('id');
+
+            $vehicleIds = VehicleFieldValue::whereIn('vehicle_type_field_id', $nameFieldIds)
+                ->where('value', 'ILIKE', '%' . $searchName . '%')
+                ->pluck('vehicle_id');
+
+            $query->whereIn('id', $vehicleIds);
+        }
+
+        // Calculate stats
+        $total = $query->count();
+        $active = (clone $query)->where('status', 'active')->count();
+        $maintenance = (clone $query)->where('status', 'maintenance')->count();
+        $inactive = (clone $query)->where('status', 'inactive')->count();
+
+        return $this->successResponse([
+            'total' => $total,
+            'active' => $active,
+            'maintenance' => $maintenance,
+            'inactive' => $inactive,
+        ]);
     }
 
     /**
