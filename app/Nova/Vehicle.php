@@ -383,7 +383,11 @@ class Vehicle extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\TenantFilter,
+            new Filters\VehicleTypeFilterForFields,
+            new Filters\VehicleStatusFilter,
+        ];
     }
 
     /**

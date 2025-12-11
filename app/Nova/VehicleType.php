@@ -100,7 +100,9 @@ class VehicleType extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\IsActiveFilter,
+        ];
     }
 
     /**

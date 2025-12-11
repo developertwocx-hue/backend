@@ -149,7 +149,13 @@ class VehicleTypeField extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\VehicleTypeFilterForFields,
+            new Filters\FieldTypeFilter,
+            new Filters\FieldScopeFilter,
+            new Filters\IsRequiredFilter,
+            new Filters\IsActiveFilter,
+        ];
     }
 
     /**

@@ -125,7 +125,10 @@ class Tenant extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\SubscriptionPlanFilter,
+            new Filters\SubscriptionStatusFilter,
+        ];
     }
 
     /**

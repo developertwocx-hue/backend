@@ -203,7 +203,15 @@ class VehicleDocument extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\TenantFilter,
+            new Filters\VehicleFilter,
+            new Filters\DocumentTypeFilter,
+            new Filters\IssueDateFilter,
+            new Filters\ExpiryDateFilter,
+            new Filters\IsExpiredFilter,
+            new Filters\UploadedByFilter,
+        ];
     }
 
     /**

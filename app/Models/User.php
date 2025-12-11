@@ -55,4 +55,12 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Tenant::class, 'tenant_id', 'id');
     }
+
+    /**
+     * Check if the user is a superadmin.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
 }

@@ -119,7 +119,11 @@ class User extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\TenantFilter,
+            new Filters\RoleFilter,
+            new Filters\EmailVerifiedFilter,
+        ];
     }
 
     /**

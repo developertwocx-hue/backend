@@ -145,7 +145,13 @@ class DocumentType extends Resource
      */
     public function filters(NovaRequest $request): array
     {
-        return [];
+        return [
+            new Filters\DocumentScopeFilter,
+            new Filters\VehicleTypeFilterForFields,
+            new Filters\TenantFilter,
+            new Filters\IsRequiredFilter,
+            new Filters\IsActiveFilter,
+        ];
     }
 
     /**
