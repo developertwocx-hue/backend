@@ -41,10 +41,17 @@ class PublicVehicleController extends ApiController
             'documents' => $vehicle->documents->map(function ($doc) {
                 return [
                     'id' => $doc->id,
-                    'document_type' => $doc->documentType->name ?? $doc->document_type,
+                    'document_type_id' => $doc->document_type_id,
+                    'document_type' => $doc->documentType ? [
+                        'id' => $doc->documentType->id,
+                        'name' => $doc->documentType->name,
+                    ] : null,
                     'document_name' => $doc->document_name,
                     'document_number' => $doc->document_number,
                     'file_path' => $doc->file_path,
+                    'file_type' => $doc->file_type,
+                    'file_size' => $doc->file_size,
+                    'issue_date' => $doc->issue_date,
                     'expiry_date' => $doc->expiry_date,
                     'is_expired' => $doc->is_expired,
                 ];

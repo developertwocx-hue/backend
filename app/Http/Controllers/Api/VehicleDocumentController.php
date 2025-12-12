@@ -258,6 +258,31 @@ class VehicleDocumentController extends ApiController
             return $this->errorResponse('Unauthorized', 403);
         }
 
+        // Debug: Check if file is present
+        if (!$request->hasFile('file')) {
+            return $this->errorResponse('No file was uploaded', 422, [
+                'file' => ['No file was provided in the request']
+            ]);
+        }
+
+        // Debug: Check if file is valid
+        if (!$request->file('file')->isValid()) {
+            $uploadError = $request->file('file')->getError();
+            $errorMessages = [
+                UPLOAD_ERR_INI_SIZE => 'The file exceeds the server upload_max_filesize directive',
+                UPLOAD_ERR_FORM_SIZE => 'The file exceeds the MAX_FILE_SIZE directive in the HTML form',
+                UPLOAD_ERR_PARTIAL => 'The file was only partially uploaded',
+                UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder on the server',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the file upload',
+            ];
+
+            return $this->errorResponse('File upload failed', 422, [
+                'file' => [$errorMessages[$uploadError] ?? 'Unknown upload error']
+            ]);
+        }
+
         $validator = Validator::make($request->all(), [
             'document_type_id' => 'required|exists:document_types,id',
             'document_name' => 'required|string|max:255',
