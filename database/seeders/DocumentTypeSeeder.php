@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\DocumentType;
 use App\Models\VehicleType;
@@ -11,152 +10,104 @@ class DocumentTypeSeeder extends Seeder
 {
     /**
      * Run the database seeds.
+     *
+     * Document types based on Cranelift screenshots - properly restricted by vehicle type
      */
     public function run(): void
     {
-        // ======================
-        // 1. GLOBAL DOCUMENT TYPES (Apply to all vehicle types, all tenants)
-        // ======================
-        $globalTypes = [
-            [
-                'name' => 'Insurance',
-                'description' => 'Vehicle insurance certificate',
-                'is_required' => true,
-                'sort_order' => 10,
-            ],
-            [
-                'name' => 'Registration',
-                'description' => 'Vehicle registration document',
-                'is_required' => true,
-                'sort_order' => 20,
-            ],
-            [
-                'name' => 'Fitness Certificate',
-                'description' => 'Vehicle fitness certificate',
-                'is_required' => true,
-                'sort_order' => 30,
-            ],
-            [
-                'name' => 'Tax Certificate',
-                'description' => 'Vehicle tax payment certificate',
-                'is_required' => false,
-                'sort_order' => 40,
-            ],
-            [
-                'name' => 'Owner Manual',
-                'description' => 'Vehicle owner/operator manual',
-                'is_required' => false,
-                'sort_order' => 50,
-            ],
-        ];
+        $crane = VehicleType::where('name', 'Crane')->first();
+        $lightVehicle = VehicleType::where('name', 'Light Vehicle')->first();
+        $truck = VehicleType::where('name', 'Truck')->first();
+        $van = VehicleType::where('name', 'Van')->first();
 
-        foreach ($globalTypes as $type) {
-            DocumentType::create(array_merge($type, [
-                'vehicle_type_id' => null, // NULL = Global
-                'tenant_id' => null, // NULL = Superadmin created
-                'is_active' => true,
-            ]));
+        $totalCreated = 0;
+
+        // Crane Document Types (Screenshot 3 - AWD-05 FRANNA MAC)
+        if ($crane) {
+            $craneDocTypes = [
+                ['name' => '10 Year Inspection', 'description' => 'Mandatory 10-year inspection certificate', 'sort_order' => 1],
+                ['name' => 'Consents/Inspections', 'description' => 'Inspection consents and reports', 'sort_order' => 2],
+                ['name' => 'Lifting Gear', 'description' => 'Lifting gear specifications and certifications', 'sort_order' => 3],
+                ['name' => 'Load Charts', 'description' => 'Load capacity charts', 'sort_order' => 4],
+                ['name' => 'Maintenance Information', 'description' => 'Maintenance records and schedules', 'sort_order' => 5],
+                ['name' => 'NDT', 'description' => 'Non-Destructive Testing reports', 'sort_order' => 6],
+                ['name' => 'Operating Manuals', 'description' => 'Operating instructions and manuals', 'sort_order' => 7],
+                ['name' => 'Product And Installation Manual', 'description' => 'Product specifications and installation guide', 'sort_order' => 8],
+                ['name' => 'Registrations', 'description' => 'Vehicle registration documents', 'sort_order' => 9],
+                ['name' => 'Risk Assessment', 'description' => 'Risk assessment documentation', 'sort_order' => 10],
+                ['name' => 'SWMS', 'description' => 'Safe Work Method Statements', 'sort_order' => 11],
+                ['name' => 'Insurances', 'description' => 'Insurance certificates and policies', 'sort_order' => 12],
+            ];
+
+            foreach ($craneDocTypes as $docType) {
+                DocumentType::create(array_merge($docType, [
+                    'vehicle_type_id' => $crane->id,
+                    'is_active' => true,
+                ]));
+                $totalCreated++;
+            }
+            $this->command->info('✓ Crane document types: ' . count($craneDocTypes));
         }
 
-        // ======================
-        // 2. VEHICLE-TYPE SPECIFIC DOCUMENT TYPES
-        // ======================
+        // Light Vehicle Document Types (Screenshot 5 - LV-02 GREAT WALL STEED)
+        if ($lightVehicle) {
+            $lvDocTypes = [
+                ['name' => 'Load Restraint Guide', 'description' => 'Load restraint guidelines and procedures', 'sort_order' => 1],
+                ['name' => 'Maintenance Information', 'description' => 'Maintenance records and schedules', 'sort_order' => 2],
+                ['name' => 'Registrations', 'description' => 'Vehicle registration documents', 'sort_order' => 3],
+                ['name' => 'Insurances', 'description' => 'Insurance certificates and policies', 'sort_order' => 4],
+            ];
 
-        // Find vehicle types (you may need to adjust these queries based on your data)
-        $mobileCustomerCrane = VehicleType::where('name', 'like', '%Mobile%Crane%')->first();
-        $towerCrane = VehicleType::where('name', 'like', '%Tower%Crane%')->first();
-        $excavator = VehicleType::where('name', 'like', '%Excavator%')->first();
-        $truck = VehicleType::where('name', 'like', '%Truck%')->first();
-
-        // Mobile Crane specific documents
-        if ($mobileCustomerCrane) {
-            DocumentType::create([
-                'name' => 'Load Test Certificate',
-                'description' => 'Certificate proving crane load capacity has been tested',
-                'vehicle_type_id' => $mobileCustomerCrane->id,
-                'tenant_id' => null,
-                'is_required' => true,
-                'is_active' => true,
-                'sort_order' => 60,
-            ]);
-
-            DocumentType::create([
-                'name' => 'Crane Operator License',
-                'description' => 'Valid crane operator license',
-                'vehicle_type_id' => $mobileCustomerCrane->id,
-                'tenant_id' => null,
-                'is_required' => true,
-                'is_active' => true,
-                'sort_order' => 70,
-            ]);
+            foreach ($lvDocTypes as $docType) {
+                DocumentType::create(array_merge($docType, [
+                    'vehicle_type_id' => $lightVehicle->id,
+                    'is_active' => true,
+                ]));
+                $totalCreated++;
+            }
+            $this->command->info('✓ Light Vehicle document types: ' . count($lvDocTypes));
         }
 
-        // Tower Crane specific documents
-        if ($towerCrane) {
-            DocumentType::create([
-                'name' => 'Installation Certificate',
-                'description' => 'Certificate confirming proper installation',
-                'vehicle_type_id' => $towerCrane->id,
-                'tenant_id' => null,
-                'is_required' => true,
-                'is_active' => true,
-                'sort_order' => 60,
-            ]);
-
-            DocumentType::create([
-                'name' => 'Structural Integrity Report',
-                'description' => 'Annual structural integrity inspection report',
-                'vehicle_type_id' => $towerCrane->id,
-                'tenant_id' => null,
-                'is_required' => true,
-                'is_active' => true,
-                'sort_order' => 70,
-            ]);
-        }
-
-        // Excavator specific documents
-        if ($excavator) {
-            DocumentType::create([
-                'name' => 'Hydraulic Inspection Certificate',
-                'description' => 'Certificate of hydraulic system inspection',
-                'vehicle_type_id' => $excavator->id,
-                'tenant_id' => null,
-                'is_required' => true,
-                'is_active' => true,
-                'sort_order' => 60,
-            ]);
-        }
-
-        // Truck specific documents
+        // Truck Document Types (Screenshot 7 - LV-03 ISUZU NLR45 Truck)
         if ($truck) {
-            DocumentType::create([
-                'name' => 'Heavy Vehicle Fitness',
-                'description' => 'Heavy vehicle fitness certificate',
-                'vehicle_type_id' => $truck->id,
-                'tenant_id' => null,
-                'is_required' => true,
-                'is_active' => true,
-                'sort_order' => 60,
-            ]);
+            $truckDocTypes = [
+                ['name' => 'Load Restraint Guide', 'description' => 'Load restraint guidelines and procedures', 'sort_order' => 1],
+                ['name' => 'Maintenance Information', 'description' => 'Maintenance records and schedules', 'sort_order' => 2],
+                ['name' => 'Registrations', 'description' => 'Vehicle registration documents', 'sort_order' => 3],
+                ['name' => 'Insurances', 'description' => 'Insurance certificates and policies', 'sort_order' => 4],
+                ['name' => 'Inductions', 'description' => 'Induction and training records', 'sort_order' => 5],
+            ];
 
-            DocumentType::create([
-                'name' => 'Commercial Vehicle Permit',
-                'description' => 'Permit for commercial vehicle operation',
-                'vehicle_type_id' => $truck->id,
-                'tenant_id' => null,
-                'is_required' => false,
-                'is_active' => true,
-                'sort_order' => 70,
-            ]);
+            foreach ($truckDocTypes as $docType) {
+                DocumentType::create(array_merge($docType, [
+                    'vehicle_type_id' => $truck->id,
+                    'is_active' => true,
+                ]));
+                $totalCreated++;
+            }
+            $this->command->info('✓ Truck document types: ' . count($truckDocTypes));
         }
 
-        $this->command->info('✅ Document types seeded successfully!');
-        $this->command->info('   - Global types: 5');
-        $this->command->info('   - Vehicle-type specific types: ' . (
-            ($mobileCustomerCrane ? 2 : 0) +
-            ($towerCrane ? 2 : 0) +
-            ($excavator ? 1 : 0) +
-            ($truck ? 2 : 0)
-        ));
+        // Van Document Types (Screenshot 9 - LV-05 LDV V-80 VAN)
+        if ($van) {
+            $vanDocTypes = [
+                ['name' => 'Product And Installation Manual', 'description' => 'Product specifications and installation guide', 'sort_order' => 1],
+                ['name' => 'Lifting Gear', 'description' => 'Lifting gear specifications and certifications', 'sort_order' => 2],
+                ['name' => 'Registrations', 'description' => 'Vehicle registration documents', 'sort_order' => 3],
+                ['name' => 'Insurances', 'description' => 'Insurance certificates and policies', 'sort_order' => 4],
+            ];
+
+            foreach ($vanDocTypes as $docType) {
+                DocumentType::create(array_merge($docType, [
+                    'vehicle_type_id' => $van->id,
+                    'is_active' => true,
+                ]));
+                $totalCreated++;
+            }
+            $this->command->info('✓ Van document types: ' . count($vanDocTypes));
+        }
+
+        $this->command->newLine();
+        $this->command->info('✓ Total document types created: ' . $totalCreated);
     }
 }

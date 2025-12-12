@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -12,11 +11,25 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
+        $this->command->info('🌱 Starting database seeding...');
+        $this->command->newLine();
 
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+        // Global seeders (no tenant context required)
+        $this->command->info('📦 Seeding global data...');
+        $this->call([
+            VehicleTypeSeeder::class,
+            VehicleTypeFieldSeeder::class,
+            DocumentTypeSeeder::class,
+        ]);
+
+        $this->command->newLine();
+        $this->command->info('✅ Global seeding completed!');
+        $this->command->newLine();
+
+        // Note about tenant-specific seeders
+        $this->command->warn('⚠️  Tenant-specific data NOT seeded.');
+        $this->command->info('To seed demo vehicles for a specific tenant, run:');
+        $this->command->line('   php artisan tenants:seed --tenants=<tenant-id> --class=DemoVehicleSeeder');
+        $this->command->newLine();
     }
 }

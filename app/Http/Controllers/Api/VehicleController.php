@@ -329,7 +329,7 @@ class VehicleController extends ApiController
                 $q->whereNull('tenant_id')
                   ->orWhere('tenant_id', $tenantId);
             })
-            ->pluck('id');
+            ->pluck('id');      
 
         // Get vehicle IDs that belong to this tenant
         $vehicleIds = Vehicle::where('tenant_id', $tenantId)->pluck('id');
