@@ -3,10 +3,51 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Vehicle;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 
 class PublicVehicleController extends ApiController
 {
+    /**
+     * Get all vehicles for a tenant (public access for QR code grid)
+     * GET /api/public/tenant/{tenantToken}/vehicles
+     */
+    public function index($tenantToken)
+    {
+        // Find tenant by a public token (you may need to add a public_token field to tenants table)
+        // For now, we'll use tenant_id as the token - you should implement proper tenant tokens
+        $tenant = Tenant::where('id', $tenantToken)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant not found', 404);
+        }
+
+        // Get all vehicles for this tenant
+        $vehicles = Vehicle::where('tenant_id', $tenant->id)
+            ->where('status', '!=', 'sold') // Exclude sold vehicles
+            ->with(['vehicleType', 'fieldValues.field'])
+            ->get();
+
+        // Transform vehicles for public view
+        $vehiclesData = $vehicles->map(function ($vehicle) {
+            return [
+                'id' => $vehicle->id,
+                'qr_code_token' => $vehicle->qr_code_token,
+                'vehicle_type' => $vehicle->vehicleType->name ?? 'Unknown',
+                'status' => $vehicle->status,
+                'field_values' => $vehicle->fieldValues->map(function ($fv) {
+                    return [
+                        'name' => $fv->field->name,
+                        'value' => $fv->value,
+                        'unit' => $fv->field->unit,
+                    ];
+                }),
+            ];
+        });
+
+        return $this->successResponse($vehiclesData);
+    }
+
     /**
      * Get vehicle details by QR code token (public access)
      * GET /api/public/vehicles/{token}

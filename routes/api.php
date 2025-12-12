@@ -33,6 +33,7 @@ Route::get('/health', function () {
 
 // Public vehicle access (QR code scanning)
 Route::get('/public/vehicles/{token}', [App\Http\Controllers\Api\PublicVehicleController::class, 'show']);
+Route::get('/public/tenant/{tenantToken}/vehicles', [App\Http\Controllers\Api\PublicVehicleController::class, 'index']);
 
 // Tenant/Business Registration
 Route::post('/tenants/register', [TenantController::class, 'registerBusiness']);
