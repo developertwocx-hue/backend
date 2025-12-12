@@ -262,7 +262,7 @@ class VehicleDocumentController extends ApiController
             'document_type_id' => 'required|exists:document_types,id',
             'document_name' => 'required|string|max:255',
             'document_number' => 'nullable|string|max:255',
-            'file' => 'required|file|max:10240', // 10MB max
+            'file' => 'required|file|max:102400', // 100MB max
             'issue_date' => 'nullable|date',
             'expiry_date' => 'nullable|date',
             'notes' => 'nullable|string',
@@ -328,7 +328,7 @@ class VehicleDocumentController extends ApiController
             'document_type_id' => 'nullable|exists:document_types,id',
             'document_name' => 'nullable|string|max:255',
             'document_number' => 'nullable|string|max:255',
-            'file' => 'nullable|file|max:10240', // 10MB max
+            'file' => 'nullable|file|max:102400', // 100MB max
             'issue_date' => 'nullable|date',
             'expiry_date' => 'nullable|date',
             'notes' => 'nullable|string',

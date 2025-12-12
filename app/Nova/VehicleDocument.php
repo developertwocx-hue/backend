@@ -140,8 +140,8 @@ class VehicleDocument extends Resource
                 ->disk('public')
                 ->path('vehicle-documents')
                 ->prunable()
-                ->rules('nullable', 'file', 'max:10240')
-                ->help('Upload document file (max 10MB)'),
+                ->rules('nullable', 'file', 'max:102400')
+                ->help('Upload document file (max 100MB)'),
 
             Text::make('File Type', 'file_type')
                 ->hideFromIndex()
