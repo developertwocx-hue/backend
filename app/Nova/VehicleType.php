@@ -58,10 +58,20 @@ class VehicleType extends Resource
         $fields = [
             ID::make()->sortable(),
 
+            BelongsTo::make('Tenant', 'tenant', Tenant::class)
+                ->nullable()
+                ->sortable()
+                ->help('Leave empty for global types available to all tenants')
+                ->displayUsing(fn($tenant) => $tenant ? $tenant->name : 'Global'),
+
+            Text::make('Scope')
+                ->onlyOnIndex()
+                ->displayUsing(fn() => $this->tenant_id ? 'Tenant-Specific' : 'Global'),
+
             Text::make('Name')
                 ->sortable()
                 ->rules('required', 'max:255')
-                ->help('Global vehicle type name (e.g., Dump Truck, Crane)'),
+                ->help('Vehicle type name (e.g., Dump Truck, Crane)'),
 
             Textarea::make('Description')
                 ->hideFromIndex()

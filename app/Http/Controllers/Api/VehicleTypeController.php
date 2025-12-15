@@ -10,11 +10,18 @@ use Illuminate\Support\Facades\Validator;
 class VehicleTypeController extends ApiController
 {
     /**
-     * Get all vehicle types (global - available to all tenants)
+     * Get all vehicle types (global + tenant-specific)
      */
     public function index(Request $request)
     {
+        $user = $request->user();
+
+        // Get global types (tenant_id = null) AND tenant-specific types
         $vehicleTypes = VehicleType::where('is_active', true)
+            ->where(function($query) use ($user) {
+                $query->whereNull('tenant_id')
+                      ->orWhere('tenant_id', $user->tenant_id);
+            })
             ->orderBy('name')
             ->get();
 
@@ -22,11 +29,18 @@ class VehicleTypeController extends ApiController
     }
 
     /**
-     * Get single vehicle type
+     * Get single vehicle type (global or tenant-owned)
      */
     public function show(Request $request, $id)
     {
-        $vehicleType = VehicleType::find($id);
+        $user = $request->user();
+
+        $vehicleType = VehicleType::where('id', $id)
+            ->where(function($query) use ($user) {
+                $query->whereNull('tenant_id')
+                      ->orWhere('tenant_id', $user->tenant_id);
+            })
+            ->first();
 
         if (!$vehicleType) {
             return $this->errorResponse('Vehicle type not found', 404);
@@ -69,27 +83,93 @@ class VehicleTypeController extends ApiController
     }
 
     /**
-     * Create vehicle type (superadmin only - via Nova)
-     * Regular tenants cannot create vehicle types
+     * Create vehicle type (tenant-scoped)
      */
     public function store(Request $request)
     {
-        return $this->errorResponse('Vehicle types can only be created by superadmin via Nova', 403);
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'is_active' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse('Validation failed', 422, $validator->errors());
+        }
+
+        try {
+            $vehicleType = VehicleType::create([
+                'tenant_id' => $user->tenant_id,
+                'name' => $request->name,
+                'description' => $request->description,
+                'is_active' => $request->is_active ?? true,
+            ]);
+
+            return $this->successResponse($vehicleType, 'Vehicle type created successfully', 201);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to create vehicle type: ' . $e->getMessage(), 500);
+        }
     }
 
     /**
-     * Update vehicle type (superadmin only - via Nova)
+     * Update vehicle type (tenant-owned only)
      */
     public function update(Request $request, $id)
     {
-        return $this->errorResponse('Vehicle types can only be updated by superadmin via Nova', 403);
+        $user = $request->user();
+
+        // Find the vehicle type and ensure it belongs to the current tenant
+        $vehicleType = VehicleType::where('id', $id)
+            ->where('tenant_id', $user->tenant_id)
+            ->first();
+
+        if (!$vehicleType) {
+            return $this->errorResponse('Vehicle type not found or you do not have permission to update it', 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'is_active' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse('Validation failed', 422, $validator->errors());
+        }
+
+        try {
+            $vehicleType->update($request->only(['name', 'description', 'is_active']));
+
+            return $this->successResponse($vehicleType, 'Vehicle type updated successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to update vehicle type: ' . $e->getMessage(), 500);
+        }
     }
 
     /**
-     * Delete vehicle type (superadmin only - via Nova)
+     * Delete vehicle type (tenant-owned only)
      */
     public function destroy(Request $request, $id)
     {
-        return $this->errorResponse('Vehicle types can only be deleted by superadmin via Nova', 403);
+        $user = $request->user();
+
+        // Find the vehicle type and ensure it belongs to the current tenant
+        $vehicleType = VehicleType::where('id', $id)
+            ->where('tenant_id', $user->tenant_id)
+            ->first();
+
+        if (!$vehicleType) {
+            return $this->errorResponse('Vehicle type not found or you do not have permission to delete it', 404);
+        }
+
+        try {
+            $vehicleType->delete();
+
+            return $this->successResponse(null, 'Vehicle type deleted successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to delete vehicle type: ' . $e->getMessage(), 500);
+        }
     }
 }

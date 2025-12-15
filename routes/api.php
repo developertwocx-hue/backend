@@ -58,9 +58,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tenant', [TenantController::class, 'getCurrentTenant']);
     Route::put('/tenant', [TenantController::class, 'updateTenant']);
 
-    // Vehicle Types (Global - read-only for tenants, managed by superadmin in Nova)
+    // Vehicle Types (Global + Tenant-specific)
     Route::get('/vehicle-types', [VehicleTypeController::class, 'index']);
+    Route::post('/vehicle-types', [VehicleTypeController::class, 'store']);
     Route::get('/vehicle-types/{id}', [VehicleTypeController::class, 'show']);
+    Route::put('/vehicle-types/{id}', [VehicleTypeController::class, 'update']);
+    Route::delete('/vehicle-types/{id}', [VehicleTypeController::class, 'destroy']);
     Route::get('/vehicle-types/{id}/fields', [VehicleTypeController::class, 'fields']);
 
     // Vehicle Type Fields (Custom fields management for tenants)
