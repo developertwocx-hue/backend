@@ -32,6 +32,10 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
             \App\Nova\Vehicle::class,
             \App\Nova\DocumentType::class,
             \App\Nova\VehicleDocument::class,
+            \App\Nova\AustralianState::class,
+            \App\Nova\ComplianceType::class,
+            \App\Nova\VehicleComplianceRequirement::class,
+            \App\Nova\ComplianceRecord::class,
         ]);
 
         // Configure sidebar menu
@@ -66,6 +70,14 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
                 \Laravel\Nova\Menu\MenuSection::make('Vehicle Documents')
                     ->path('/resources/vehicle-documents')
                     ->icon('document-text'),
+
+                \Laravel\Nova\Menu\MenuSection::make('Compliance Types')
+                    ->path('/resources/compliance-types')
+                    ->icon('clipboard-document-check'),
+
+                \Laravel\Nova\Menu\MenuSection::make('Compliance Records')
+                    ->path('/resources/compliance-records')
+                    ->icon('shield-check'),
             ];
         });
 
@@ -152,6 +164,9 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
             \App\Nova\Vehicle::class,
             \App\Nova\DocumentType::class,
             \App\Nova\VehicleDocument::class,
+            \App\Nova\AustralianState::class,
+            \App\Nova\ComplianceType::class,
+            \App\Nova\ComplianceRecord::class,
         ];
     }
 

@@ -10,6 +10,9 @@ use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleDocumentController;
 use App\Http\Controllers\Api\DocumentTypeController;
 use App\Http\Controllers\Api\VehicleImportController;
+use App\Http\Controllers\Api\ComplianceTypeController;
+use App\Http\Controllers\Api\ComplianceRecordController;
+use App\Http\Controllers\Api\ComplianceDashboardController;
 
 /*
 |--------------------------------------------------------------------------
@@ -95,4 +98,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/documents/bulk-delete', [VehicleDocumentController::class, 'bulkDelete']);
     Route::get('/documents/autocomplete/names', [VehicleDocumentController::class, 'autocompleteNames']);
     Route::get('/documents/autocomplete/numbers', [VehicleDocumentController::class, 'autocompleteNumbers']);
+
+    // ============================================
+    // COMPLIANCE MANAGEMENT MODULE
+    // ============================================
+
+    // Compliance Types (Global + State-Specific + Tenant Custom)
+    Route::get('/compliance-types', [ComplianceTypeController::class, 'index']);
+    Route::get('/compliance-types/categories', [ComplianceTypeController::class, 'getCategories']);
+    Route::get('/compliance-types/{id}', [ComplianceTypeController::class, 'show']);
+    Route::post('/compliance-types', [ComplianceTypeController::class, 'store']); // Tenant creates custom
+    Route::put('/compliance-types/{id}', [ComplianceTypeController::class, 'update']); // Tenant updates own
+    Route::delete('/compliance-types/{id}', [ComplianceTypeController::class, 'destroy']); // Tenant deletes own
+    Route::get('/vehicles/{vehicleId}/compliance-types', [ComplianceTypeController::class, 'getForVehicle']);
+
+    // Compliance Records (THE CORE - Where compliance magic happens)
+    Route::get('/vehicles/{vehicleId}/compliance-records', [ComplianceRecordController::class, 'index']);
+    Route::get('/vehicles/{vehicleId}/compliance-records/{id}', [ComplianceRecordController::class, 'show']);
+    Route::post('/vehicles/{vehicleId}/compliance-records', [ComplianceRecordController::class, 'store']);
+    Route::put('/vehicles/{vehicleId}/compliance-records/{id}', [ComplianceRecordController::class, 'update']);
+    Route::delete('/vehicles/{vehicleId}/compliance-records/{id}', [ComplianceRecordController::class, 'destroy']);
+
+    // Compliance Status & Helpers
+    Route::get('/vehicles/{vehicleId}/compliance/status', [ComplianceRecordController::class, 'getCurrentStatus']);
+    Route::get('/vehicles/{vehicleId}/compliance/requirements/{requirementId}/history', [ComplianceRecordController::class, 'getHistory']);
+    Route::post('/vehicles/{vehicleId}/compliance-records/{id}/approve', [ComplianceRecordController::class, 'approve']);
 });

@@ -13,6 +13,7 @@ use Laravel\Nova\Fields\Boolean;
 use Laravel\Nova\Fields\BelongsTo;
 use Laravel\Nova\Fields\HasMany;
 use Laravel\Nova\Fields\DateTime;
+use Laravel\Nova\Fields\Badge;
 use Laravel\Nova\Http\Requests\NovaRequest;
 
 class Vehicle extends Resource
@@ -40,13 +41,21 @@ class Vehicle extends Resource
     }
 
     /**
+     * Get the searchable columns for the resource.
+     *
+     * @return array
+     */
+    public static function searchableColumns()
+    {
+        return ['id'];
+    }
+
+    /**
      * The columns that should be searched.
      *
      * @var array
      */
-    public static $search = [
-        'id',
-    ];
+    public static $search = [];
 
     /**
      * Determine if the resource should be available for the given request.
@@ -104,6 +113,48 @@ class Vehicle extends Resource
                 ->sortable()
                 ->rules('required')
                 ->default('active'),
+
+            Select::make('State of Operation', 'state_of_operation')
+                ->options([
+                    'NSW' => 'New South Wales',
+                    'VIC' => 'Victoria',
+                    'QLD' => 'Queensland',
+                    'WA' => 'Western Australia',
+                    'SA' => 'South Australia',
+                    'TAS' => 'Tasmania',
+                    'ACT' => 'Australian Capital Territory',
+                    'NT' => 'Northern Territory',
+                ])
+                ->displayUsingLabels()
+                ->nullable()
+                ->help('Primary state where this vehicle operates'),
+
+            Badge::make('Compliance Status', 'compliance_status')
+                ->map([
+                    'compliant' => 'success',
+                    'at_risk' => 'warning',
+                    'expired' => 'danger',
+                    'pending' => 'info',
+                ])
+                ->displayUsing(fn() => ucfirst($this->compliance_status ?? 'pending'))
+                ->exceptOnForms(),
+
+            Number::make('Compliance Score', 'compliance_score')
+                ->min(0)
+                ->max(100)
+                ->step(0.01)
+                ->displayUsing(fn($value) => $value !== null ? round($value, 2) . '%' : 'N/A')
+                ->exceptOnForms()
+                ->help('Calculated compliance score (0-100)'),
+
+            Badge::make('Operational Status', 'operational_status')
+                ->map([
+                    'operational' => 'success',
+                    'restricted' => 'warning',
+                    'non_operational' => 'danger',
+                ])
+                ->displayUsing(fn() => ucfirst(str_replace('_', ' ', $this->operational_status ?? 'operational')))
+                ->exceptOnForms(),
         ];
 
         // Add dynamic fields from vehicle_type_fields (only default fields for Nova/superadmin)
@@ -198,6 +249,7 @@ class Vehicle extends Resource
         }
 
         $fields[] = HasMany::make('Documents', 'documents', VehicleDocument::class);
+        $fields[] = HasMany::make('Compliance Records', 'complianceRecords', ComplianceRecord::class);
         $fields[] = DateTime::make('Created At')->exceptOnForms()->sortable();
         $fields[] = DateTime::make('Updated At')->exceptOnForms();
 
