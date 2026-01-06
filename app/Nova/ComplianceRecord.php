@@ -133,10 +133,8 @@ class ComplianceRecord extends Resource
                 ->deletable(false)
                 ->nullable()
                 ->rules('nullable', 'file', 'max:102400')
-                ->fillUsing(function ($request, $model, $attribute, $requestAttribute) {
-                    // Do nothing - file is handled in afterCreate/afterUpdate
-                    // Return null to prevent Nova from trying to save this field
-                    return null;
+                ->store(function ($request, $model) {
+                    return [];
                 }),
 
             Boolean::make('Is Current', 'is_current')
@@ -174,11 +172,20 @@ class ComplianceRecord extends Resource
      */
     public static function afterCreate(NovaRequest $request, $model)
     {
-        // Auto-fill tenant_id and submitted_by from authenticated user
-        $user = $request->user();
-        $model->tenant_id = $user->tenant_id;
-        $model->submitted_by = $user->id;
-        $model->save();
+        // Don't overwrite tenant_id with null if user is superadmin
+        // Model's creating() event auto-fills this from Vehicle
+        if ($request->user()->tenant_id) {
+            $model->submitted_by = $request->user()->id;
+            // Only update if not already set by model
+            if (!$model->tenant_id) {
+                $model->tenant_id = $request->user()->tenant_id;
+            }
+            $model->save();
+        } elseif (!$model->submitted_by) {
+            // Ensure submitted_by is at least set
+            $model->submitted_by = $request->user()->id;
+            $model->save();
+        }
 
         // Handle document upload
         static::handleDocumentUpload($request, $model);
@@ -202,11 +209,14 @@ class ComplianceRecord extends Resource
             $file = $request->file('compliance_document');
             $filePath = $file->store('vehicle-documents', 'public');
 
+            $complianceType = \App\Models\ComplianceType::find($model->compliance_type_id);
+
             // Create vehicle document record
             $document = \App\Models\VehicleDocument::create([
                 'tenant_id' => $model->tenant_id,
                 'vehicle_id' => $model->vehicle_id,
                 'document_type_id' => null,
+                'document_type' => $complianceType->category ?? 'compliance_evidence', // Fix: Populate legacy field
                 'document_name' => $file->getClientOriginalName(),
                 'file_path' => $filePath,
                 'file_type' => $file->getMimeType(),

@@ -152,6 +152,41 @@ class ComplianceRecord extends Model
 
         // Auto-mark only one record as current per requirement
         static::creating(function ($record) {
+            // Auto-fill tenant_id from Vehicle if missing (more reliable than Auth user)
+            if (!$record->tenant_id && $record->vehicle_id) {
+                // We need to fetch the vehicle to get the tenant_id
+                $vehicle = Vehicle::find($record->vehicle_id);
+                if ($vehicle) {
+                    $record->tenant_id = $vehicle->tenant_id;
+                } elseif (auth()->check()) {
+                    // Fallback to auth user if vehicle not found (unlikely)
+                    $record->tenant_id = auth()->user()->tenant_id;
+                }
+            }
+
+            // Auto-fill submitted_by from auth user if missing
+            if (!$record->submitted_by && auth()->check()) {
+                $record->submitted_by = auth()->id();
+            }
+
+            // Auto-fill vehicle_compliance_requirement_id
+            if (!$record->vehicle_compliance_requirement_id && $record->vehicle_id && $record->compliance_type_id) {
+                // Get compliance type details to know if it requires anything
+                $complianceType = ComplianceType::find($record->compliance_type_id);
+
+                if ($complianceType) {
+                    $requirement = VehicleComplianceRequirement::firstOrCreate([
+                        'vehicle_id' => $record->vehicle_id,
+                        'compliance_type_id' => $record->compliance_type_id,
+                    ], [
+                        'tenant_id' => $record->tenant_id,
+                        'is_required' => $complianceType->is_required,
+                    ]);
+
+                    $record->vehicle_compliance_requirement_id = $requirement->id;
+                }
+            }
+
             if ($record->is_current) {
                 static::where('vehicle_compliance_requirement_id', $record->vehicle_compliance_requirement_id)
                     ->update(['is_current' => false]);
