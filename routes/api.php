@@ -118,9 +118,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vehicles/{vehicleId}/compliance-records', [ComplianceRecordController::class, 'store']);
     Route::put('/vehicles/{vehicleId}/compliance-records/{id}', [ComplianceRecordController::class, 'update']);
     Route::delete('/vehicles/{vehicleId}/compliance-records/{id}', [ComplianceRecordController::class, 'destroy']);
+    Route::get('/vehicles/{vehicleId}/compliance-records/{id}/download', [ComplianceRecordController::class, 'downloadDocument']);
 
     // Compliance Status & Helpers
     Route::get('/vehicles/{vehicleId}/compliance/status', [ComplianceRecordController::class, 'getCurrentStatus']);
     Route::get('/vehicles/{vehicleId}/compliance/requirements/{requirementId}/history', [ComplianceRecordController::class, 'getHistory']);
     Route::post('/vehicles/{vehicleId}/compliance-records/{id}/approve', [ComplianceRecordController::class, 'approve']);
+
+    // Compliance Dashboard - Fleet Statistics & Alerts
+    Route::prefix('compliance/dashboard')->group(function () {
+        Route::get('/stats', [ComplianceDashboardController::class, 'getStats']);
+        Route::get('/fleet-at-risk', [ComplianceDashboardController::class, 'getFleetAtRisk']);
+        Route::get('/overdue-items', [ComplianceDashboardController::class, 'getOverdueItems']);
+        Route::get('/expiring-soon', [ComplianceDashboardController::class, 'getExpiringSoon']);
+        Route::get('/alerts', [ComplianceDashboardController::class, 'getAlerts']);
+        Route::post('/alerts/{alertId}/acknowledge', [ComplianceDashboardController::class, 'acknowledgeAlert']);
+        Route::get('/summary-by-category', [ComplianceDashboardController::class, 'getSummaryByCategory']);
+    });
 });

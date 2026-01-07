@@ -86,8 +86,12 @@ class ComplianceRecordController extends ApiController
     {
         $user = $request->user();
 
-        $vehicle = Vehicle::where('tenant_id', $user->tenant_id)
-            ->findOrFail($vehicleId);
+        // Fix: Allow SuperAdmins to access any vehicle
+        $query = Vehicle::query();
+        if ($user->role !== 'superadmin') {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+        $vehicle = $query->findOrFail($vehicleId);
 
         $validator = Validator::make($request->all(), [
             'compliance_type_id' => 'required|exists:compliance_types,id',
@@ -96,8 +100,6 @@ class ComplianceRecordController extends ApiController
             'inspection_provider' => 'nullable|string|max:255',
             'inspection_number' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
-            'document_ids' => 'nullable|array',
-            'document_ids.*' => 'exists:vehicle_documents,id',
             'file' => 'nullable|file|max:102400', // 100MB max
         ]);
 
@@ -123,34 +125,12 @@ class ComplianceRecordController extends ApiController
                 'vehicle_id' => $vehicle->id,
                 'compliance_type_id' => $complianceType->id,
             ], [
-                'tenant_id' => $user->tenant_id,
+                'tenant_id' => $vehicle->tenant_id, // Use vehicle's tenant_id
                 'is_required' => $complianceType->is_required,
             ]);
 
-            // Handle file upload if provided
-            $documentIds = $request->document_ids ?? [];
-
-            if ($request->hasFile('file')) {
-                $file = $request->file('file');
-                $filePath = $file->store('vehicle-documents', 'public');
-
-                $document = VehicleDocument::create([
-                    'tenant_id' => $user->tenant_id,
-                    'vehicle_id' => $vehicle->id,
-                    'document_type_id' => null, // Can be set later
-                    'document_type' => $complianceType->category ?? 'compliance_evidence', // Fix: Populate legacy field
-                    'document_name' => $request->document_name ?? $file->getClientOriginalName(),
-                    'file_path' => $filePath,
-                    'file_type' => $file->getMimeType(),
-                    'file_size' => $file->getSize(),
-                    'uploaded_by' => $user->id,
-                ]);
-
-                $documentIds[] = $document->id;
-            }
-
             // VALIDATION: Check if documents are required
-            if ($complianceType->requires_document && empty($documentIds)) {
+            if ($complianceType->requires_document && !$request->hasFile('file')) {
                 DB::rollBack();
                 return $this->errorResponse(
                     'This compliance type requires document evidence',
@@ -158,29 +138,8 @@ class ComplianceRecordController extends ApiController
                 );
             }
 
-            // VALIDATION: Check if document types are accepted
-            if (!empty($documentIds)) {
-                $documents = VehicleDocument::whereIn('id', $documentIds)
-                    ->where('vehicle_id', $vehicle->id)
-                    ->get();
-
-                $acceptedTypes = $complianceType->accepted_document_types ?? [];
-
-                foreach ($documents as $doc) {
-                    if (!empty($acceptedTypes) && $doc->document_type_id &&
-                        !in_array($doc->document_type_id, $acceptedTypes)) {
-                        DB::rollBack();
-                        return $this->errorResponse(
-                            "Document '{$doc->document_name}' type not accepted for this compliance",
-                            422
-                        );
-                    }
-                }
-            }
-
-            // Create compliance record
-            $record = ComplianceRecord::create([
-                'tenant_id' => $user->tenant_id,
+            $currentRecordData = [
+                'tenant_id' => $vehicle->tenant_id, // Use vehicle's tenant_id
                 'vehicle_compliance_requirement_id' => $requirement->id,
                 'vehicle_id' => $vehicle->id,
                 'compliance_type_id' => $complianceType->id,
@@ -190,21 +149,22 @@ class ComplianceRecordController extends ApiController
                 'inspection_number' => $request->inspection_number,
                 'notes' => $request->notes,
                 'submitted_by' => $user->id,
-                'is_current' => true, // Auto-marks previous records as not current
-            ]);
+                'is_current' => true,
+            ];
 
-            // Link documents
-            if (!empty($documentIds)) {
-                foreach ($documentIds as $index => $docId) {
-                    DB::table('compliance_record_documents')->insert([
-                        'compliance_record_id' => $record->id,
-                        'vehicle_document_id' => $docId,
-                        'is_primary' => $index === 0, // First document is primary
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
+            // Handle file upload directly to ComplianceRecord
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $filePath = $file->store('compliance-documents', 'public');
+
+                $currentRecordData['document_path'] = $filePath;
+                $currentRecordData['document_name'] = $request->document_name ?? $file->getClientOriginalName();
+                $currentRecordData['document_type'] = $file->getMimeType();
+                $currentRecordData['document_size'] = $file->getSize();
             }
+
+            // Create compliance record
+            $record = ComplianceRecord::create($currentRecordData);
 
             // Update vehicle compliance score
             $vehicle->refresh();
@@ -212,7 +172,7 @@ class ComplianceRecordController extends ApiController
 
             DB::commit();
 
-            $record->load(['complianceType', 'documents', 'submittedBy']);
+            $record->load(['complianceType', 'submittedBy']);
 
             return $this->successResponse($record, 'Compliance record created successfully', 201);
 
@@ -229,8 +189,12 @@ class ComplianceRecordController extends ApiController
     {
         $user = $request->user();
 
-        $vehicle = Vehicle::where('tenant_id', $user->tenant_id)
-            ->findOrFail($vehicleId);
+        // Fix: Allow SuperAdmins to access any vehicle
+        $query = Vehicle::query();
+        if ($user->role !== 'superadmin') {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+        $vehicle = $query->findOrFail($vehicleId);
 
         $record = ComplianceRecord::where('vehicle_id', $vehicleId)
             ->findOrFail($id);
@@ -241,8 +205,7 @@ class ComplianceRecordController extends ApiController
             'inspection_provider' => 'nullable|string|max:255',
             'inspection_number' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
-            'document_ids' => 'nullable|array',
-            'document_ids.*' => 'exists:vehicle_documents,id',
+            'file' => 'nullable|file|max:102400', // 100MB max
         ]);
 
         if ($validator->fails()) {
@@ -251,32 +214,31 @@ class ComplianceRecordController extends ApiController
 
         DB::beginTransaction();
         try {
-            $record->update($request->only([
+            $updateData = $request->only([
                 'issue_date',
                 'expiry_date',
                 'inspection_provider',
                 'inspection_number',
                 'notes',
-            ]));
+            ]);
 
-            // Update documents if provided
-            if ($request->has('document_ids')) {
-                // Remove existing links
-                DB::table('compliance_record_documents')
-                    ->where('compliance_record_id', $record->id)
-                    ->delete();
-
-                // Add new links
-                foreach ($request->document_ids as $index => $docId) {
-                    DB::table('compliance_record_documents')->insert([
-                        'compliance_record_id' => $record->id,
-                        'vehicle_document_id' => $docId,
-                        'is_primary' => $index === 0,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+            // Handle file upload directly to ComplianceRecord
+            if ($request->hasFile('file')) {
+                // Delete old file if exists
+                if ($record->document_path && Storage::disk('public')->exists($record->document_path)) {
+                    Storage::disk('public')->delete($record->document_path);
                 }
+
+                $file = $request->file('file');
+                $filePath = $file->store('compliance-documents', 'public');
+
+                $updateData['document_path'] = $filePath;
+                $updateData['document_name'] = $request->document_name ?? $file->getClientOriginalName();
+                $updateData['document_type'] = $file->getMimeType();
+                $updateData['document_size'] = $file->getSize();
             }
+
+            $record->update($updateData);
 
             // Update vehicle compliance score
             $vehicle->refresh();
@@ -284,7 +246,7 @@ class ComplianceRecordController extends ApiController
 
             DB::commit();
 
-            $record->load(['complianceType', 'documents', 'submittedBy', 'approvedBy']);
+            $record->load(['complianceType', 'submittedBy', 'approvedBy']);
 
             return $this->successResponse($record, 'Compliance record updated successfully');
 
@@ -309,6 +271,11 @@ class ComplianceRecordController extends ApiController
 
         DB::beginTransaction();
         try {
+            // Delete document file if exists
+            if ($record->document_path && Storage::disk('public')->exists($record->document_path)) {
+                Storage::disk('public')->delete($record->document_path);
+            }
+
             $record->delete();
 
             // Update vehicle compliance score
@@ -333,19 +300,27 @@ class ComplianceRecordController extends ApiController
         $user = $request->user();
 
         $vehicle = Vehicle::where('tenant_id', $user->tenant_id)
-            ->with(['complianceRequirements.complianceType', 'complianceRequirements.currentRecord'])
+            ->with(['vehicleType', 'complianceRequirements.complianceType', 'complianceRequirements.currentRecord'])
             ->findOrFail($vehicleId);
 
-        $requirements = $vehicle->complianceRequirements()
-            ->where('is_required', true)
+        // Get ALL requirements (both required and optional)
+        $allRequirements = $vehicle->complianceRequirements()
             ->with(['complianceType', 'currentRecord.documents'])
             ->get();
 
-        $status = $requirements->map(function($req) {
+        // Get only required requirements for status calculation
+        $requiredRequirements = $allRequirements->filter(fn($req) => $req->is_required);
+
+        // Map all requirements to detailed status
+        $requirementStatuses = $allRequirements->map(function($req) {
             return [
                 'requirement_id' => $req->id,
-                'compliance_type' => $req->complianceType->name,
+                'compliance_type_id' => $req->compliance_type_id,
+                'compliance_type_name' => $req->complianceType->name,
                 'category' => $req->complianceType->category,
+                'is_required' => $req->is_required,
+                'renewal_frequency_days' => $req->complianceType->renewal_frequency_days,
+                'requires_document' => $req->complianceType->requires_document,
                 'status' => $req->getCurrentStatus(),
                 'current_record' => $req->currentRecord,
                 'days_until_expiry' => $req->getDaysUntilExpiry(),
@@ -353,9 +328,24 @@ class ComplianceRecordController extends ApiController
             ];
         });
 
+        // Separate required and optional
+        $required = $requirementStatuses->filter(fn($r) => $r['is_required'])->values();
+        $optional = $requirementStatuses->filter(fn($r) => !$r['is_required'])->values();
+
         return $this->successResponse([
-            'vehicle' => $vehicle->only(['id', 'compliance_status', 'compliance_score', 'operational_status']),
-            'requirements' => $status,
+            'vehicle' => [
+                'id' => $vehicle->id,
+                'vehicle_type_id' => $vehicle->vehicle_type_id,
+                'vehicle_type_name' => $vehicle->vehicleType->name ?? null,
+                'state_of_operation' => $vehicle->state_of_operation,
+                'compliance_status' => $vehicle->compliance_status,
+                'compliance_score' => $vehicle->compliance_score,
+                'operational_status' => $vehicle->operational_status,
+            ],
+            'requirements' => [
+                'required' => $required,
+                'optional' => $optional,
+            ],
             'summary' => $vehicle->getComplianceSummary(),
         ], 'Current compliance status retrieved successfully');
     }
@@ -392,8 +382,12 @@ class ComplianceRecordController extends ApiController
     {
         $user = $request->user();
 
-        $vehicle = Vehicle::where('tenant_id', $user->tenant_id)
-            ->findOrFail($vehicleId);
+        // Fix: Allow SuperAdmins to access any vehicle
+        $query = Vehicle::query();
+        if ($user->role !== 'superadmin') {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+        $vehicle = $query->findOrFail($vehicleId);
 
         $record = ComplianceRecord::where('vehicle_id', $vehicleId)
             ->findOrFail($id);
@@ -411,5 +405,38 @@ class ComplianceRecordController extends ApiController
         $record->load(['complianceType', 'documents', 'submittedBy', 'approvedBy']);
 
         return $this->successResponse($record, 'Compliance record approved successfully');
+    }
+
+    /**
+     * Download compliance document
+     */
+    public function downloadDocument(Request $request, $vehicleId, $id)
+    {
+        $user = $request->user();
+
+        // Fix: Allow SuperAdmins to access any vehicle
+        $query = Vehicle::query();
+        if ($user->role !== 'superadmin') {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+        $vehicle = $query->findOrFail($vehicleId);
+
+        $record = ComplianceRecord::where('vehicle_id', $vehicleId)
+            ->findOrFail($id);
+
+        if (!$record->document_path || !Storage::disk('public')->exists($record->document_path)) {
+            return $this->errorResponse('Document not found', 404);
+        }
+
+        // Set proper headers with MIME type
+        $headers = [
+            'Content-Type' => $record->document_type ?? 'application/octet-stream',
+        ];
+
+        return Storage::disk('public')->download(
+            $record->document_path,
+            $record->document_name ?? 'document',
+            $headers
+        );
     }
 }

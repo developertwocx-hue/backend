@@ -121,7 +121,7 @@ class Vehicle extends Model
             ->get();
 
         if ($requirements->isEmpty()) {
-            return 'compliant'; // No requirements = compliant
+            return 'pending'; // No requirements = pending (need to set up compliance)
         }
 
         $statuses = $requirements->map(function($req) {
@@ -152,7 +152,7 @@ class Vehicle extends Model
             ->get();
 
         if ($requirements->isEmpty()) {
-            return 100.00;
+            return 0.00; // No requirements = 0% (need to set up compliance)
         }
 
         $totalWeight = $requirements->count();

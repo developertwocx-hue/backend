@@ -73,28 +73,17 @@ class ComplianceType extends Model
 
     public function scopeForVehicle($query, Vehicle $vehicle)
     {
+        // SIMPLIFIED: Ignore state_of_operation, focus only on vehicle type
         return $query->where('is_active', true)
             ->where(function ($q) use ($vehicle) {
-                // Global (all vehicles)
+                // Global (all vehicles) - no tenant, no vehicle type
                 $q->where(function ($subQ) {
                     $subQ->whereNull('tenant_id')
-                         ->whereNull('vehicle_type_id')
-                         ->whereNull('state_code');
+                         ->whereNull('vehicle_type_id');
                 })
-                // State-specific
+                // Vehicle-type specific - no tenant, specific vehicle type (regardless of state)
                 ->orWhere(function ($subQ) use ($vehicle) {
                     $subQ->whereNull('tenant_id')
-                         ->where('state_code', $vehicle->state_of_operation);
-                })
-                // Vehicle-type specific
-                ->orWhere(function ($subQ) use ($vehicle) {
-                    $subQ->whereNull('tenant_id')
-                         ->where('vehicle_type_id', $vehicle->vehicle_type_id);
-                })
-                // State + Vehicle Type
-                ->orWhere(function ($subQ) use ($vehicle) {
-                    $subQ->whereNull('tenant_id')
-                         ->where('state_code', $vehicle->state_of_operation)
                          ->where('vehicle_type_id', $vehicle->vehicle_type_id);
                 })
                 // Tenant custom

@@ -122,20 +122,21 @@ class ComplianceRecord extends Resource
                 ->hideFromIndex()
                 ->nullable(),
 
-            File::make('Upload Document', 'compliance_document')
+            File::make('Upload Document', 'document_path')
                 ->disk('public')
-                ->path('vehicle-documents')
+                ->path('compliance-documents')
                 ->acceptedTypes('.pdf,.jpg,.jpeg,.png,.doc,.docx')
                 ->help('Upload compliance document (PDF, JPG, PNG, DOC, DOCX - Max 100MB)')
                 ->hideFromIndex()
                 ->hideFromDetail()
                 ->onlyOnForms()
-                ->deletable(false)
                 ->nullable()
                 ->rules('nullable', 'file', 'max:102400')
-                ->store(function ($request, $model) {
-                    return [];
-                }),
+                ->prunable(),
+
+            Text::make('Document Name', 'document_name')
+                 ->exceptOnForms()
+                 ->hideFromIndex(),
 
             Boolean::make('Is Current', 'is_current')
                 ->exceptOnForms()
@@ -154,8 +155,6 @@ class ComplianceRecord extends Resource
             DateTime::make('Approved At', 'approved_at')
                 ->nullable()
                 ->readonly(),
-
-            BelongsToMany::make('Documents', 'documents', VehicleDocument::class),
 
             DateTime::make('Created At', 'created_at')
                 ->hideFromIndex()
@@ -187,8 +186,8 @@ class ComplianceRecord extends Resource
             $model->save();
         }
 
-        // Handle document upload
-        static::handleDocumentUpload($request, $model);
+        // Handle document metadata
+        static::handleDocumentMetadata($request, $model);
     }
 
     /**
@@ -196,41 +195,22 @@ class ComplianceRecord extends Resource
      */
     public static function afterUpdate(NovaRequest $request, $model)
     {
-        // Handle document upload on update
-        static::handleDocumentUpload($request, $model);
+        // Handle document metadata on update
+        static::handleDocumentMetadata($request, $model);
     }
 
     /**
-     * Handle document upload and attachment
+     * Handle document metadata population
      */
-    protected static function handleDocumentUpload($request, $model)
+    protected static function handleDocumentMetadata($request, $model)
     {
-        if ($request->hasFile('compliance_document')) {
-            $file = $request->file('compliance_document');
-            $filePath = $file->store('vehicle-documents', 'public');
-
-            $complianceType = \App\Models\ComplianceType::find($model->compliance_type_id);
-
-            // Create vehicle document record
-            $document = \App\Models\VehicleDocument::create([
-                'tenant_id' => $model->tenant_id,
-                'vehicle_id' => $model->vehicle_id,
-                'document_type_id' => null,
-                'document_type' => $complianceType->category ?? 'compliance_evidence', // Fix: Populate legacy field
+        if ($request->hasFile('document_path')) {
+            $file = $request->file('document_path');
+            
+            $model->update([
                 'document_name' => $file->getClientOriginalName(),
-                'file_path' => $filePath,
-                'file_type' => $file->getMimeType(),
-                'file_size' => $file->getSize(),
-                'uploaded_by' => $request->user()->id,
-            ]);
-
-            // Attach document to compliance record
-            \Illuminate\Support\Facades\DB::table('compliance_record_documents')->insert([
-                'compliance_record_id' => $model->id,
-                'vehicle_document_id' => $document->id,
-                'is_primary' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'document_type' => $file->getMimeType(),
+                'document_size' => $file->getSize(),
             ]);
         }
     }
