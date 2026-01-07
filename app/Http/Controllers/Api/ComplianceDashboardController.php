@@ -183,8 +183,8 @@ class ComplianceDashboardController extends ApiController
             })->map(function ($req) {
                 return [
                     'requirement_id' => $req->id,
-                    'compliance_type' => $req->complianceType->name,
-                    'category' => $req->complianceType->category,
+                    'compliance_type' => $req->complianceType->name ?? 'Unknown',
+                    'category' => $req->complianceType->category ?? 'Unknown',
                     'status' => $req->getCurrentStatus(),
                     'days_until_expiry' => $req->getDaysUntilExpiry(),
                     'expiry_date' => $req->currentRecord?->expiry_date?->format('Y-m-d'),
@@ -244,8 +244,8 @@ class ComplianceDashboardController extends ApiController
                         'state_of_operation' => $vehicle->state_of_operation,
                         'requirement_id' => $requirement->id,
                         'compliance_type_id' => $requirement->compliance_type_id,
-                        'compliance_type_name' => $requirement->complianceType->name,
-                        'category' => $requirement->complianceType->category,
+                        'compliance_type_name' => $requirement->complianceType->name ?? 'Unknown',
+                        'category' => $requirement->complianceType->category ?? 'Unknown',
                         'is_required' => $requirement->is_required,
                         'expiry_date' => $requirement->currentRecord?->expiry_date?->format('Y-m-d'),
                         'days_overdue' => abs($requirement->getDaysUntilExpiry()),
@@ -363,8 +363,8 @@ class ComplianceDashboardController extends ApiController
                         'state_of_operation' => $vehicle->state_of_operation,
                         'requirement_id' => $requirement->id,
                         'compliance_type_id' => $requirement->compliance_type_id,
-                        'compliance_type_name' => $requirement->complianceType->name,
-                        'category' => $requirement->complianceType->category,
+                        'compliance_type_name' => $requirement->complianceType->name ?? 'Unknown',
+                        'category' => $requirement->complianceType->category ?? 'Unknown',
                         'is_required' => $requirement->is_required,
                         'status' => $requirement->getCurrentStatus(),
                         'expiry_date' => $requirement->currentRecord?->expiry_date?->format('Y-m-d'),
@@ -435,7 +435,7 @@ class ComplianceDashboardController extends ApiController
             $requirements = $vehicle->complianceRequirements;
 
             foreach ($requirements as $requirement) {
-                $category = $requirement->complianceType->category;
+                $category = $requirement->complianceType->category ?? 'Unknown';
                 $status = $requirement->getCurrentStatus();
 
                 if (!isset($categorySummary[$category])) {
