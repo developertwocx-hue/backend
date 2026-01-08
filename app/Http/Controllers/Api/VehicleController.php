@@ -32,6 +32,11 @@ class VehicleController extends ApiController
             $query->where('status', $request->status);
         }
 
+        // Filter by compliance status if provided
+        if ($request->has('compliance_status') && $request->compliance_status) {
+            $query->where('compliance_status', $request->compliance_status);
+        }
+
         // Filter by date range if provided
         if ($request->has('date_from') && $request->date_from) {
             $query->whereDate('created_at', '>=', $request->date_from);
@@ -72,6 +77,46 @@ class VehicleController extends ApiController
                 }
 
                 return stripos($nameField->value, $searchName) !== false;
+            })->values();
+        }
+
+        // Filter by compliance expiry/overdue/pending if provided (must be done after loading vehicles)
+        $complianceFilter = $request->input('compliance_filter');
+        if ($complianceFilter && in_array($complianceFilter, ['at_risk', 'expiring', 'overdue', 'pending'])) {
+            // Load compliance requirements for filtering
+            $vehicles->load([
+                'complianceRequirements.complianceType',
+                'complianceRequirements.currentRecord'
+            ]);
+
+            $vehicles = $vehicles->filter(function($vehicle) use ($complianceFilter) {
+                switch ($complianceFilter) {
+                    case 'at_risk':
+                        // Match getFleetAtRisk logic: vehicles with at_risk, expired, or pending compliance_status
+                        return in_array($vehicle->compliance_status, ['at_risk', 'expired', 'pending']);
+
+                    case 'overdue':
+                        // Has at least one overdue requirement (expired status)
+                        $requirements = $vehicle->complianceRequirements;
+                        return $requirements->contains(function($req) {
+                            return $req->isOverdue();
+                        });
+
+                    case 'expiring':
+                        // Has at least one requirement expiring within 30 days (but not overdue)
+                        $requirements = $vehicle->complianceRequirements;
+                        return $requirements->contains(function($req) {
+                            $daysUntil = $req->getDaysUntilExpiry();
+                            return $daysUntil !== null && $daysUntil >= 0 && $daysUntil <= 30 && !$req->isOverdue();
+                        });
+
+                    case 'pending':
+                        // Match getStats logic: vehicles with pending compliance_status
+                        return $vehicle->compliance_status === 'pending';
+
+                    default:
+                        return true;
+                }
             })->values();
         }
 
@@ -269,6 +314,11 @@ class VehicleController extends ApiController
             $query->where('status', $request->status);
         }
 
+        // Filter by compliance status if provided
+        if ($request->has('compliance_status') && $request->compliance_status) {
+            $query->where('compliance_status', $request->compliance_status);
+        }
+
         if ($request->has('date_from') && $request->date_from) {
             $query->whereDate('created_at', '>=', $request->date_from);
         }
@@ -295,11 +345,57 @@ class VehicleController extends ApiController
             $query->whereIn('id', $vehicleIds);
         }
 
-        // Calculate stats
-        $total = $query->count();
-        $active = (clone $query)->where('status', 'active')->count();
-        $maintenance = (clone $query)->where('status', 'maintenance')->count();
-        $inactive = (clone $query)->where('status', 'inactive')->count();
+        // Get vehicles collection for compliance filtering if needed
+        $complianceFilter = $request->input('compliance_filter');
+        if ($complianceFilter && in_array($complianceFilter, ['at_risk', 'expiring', 'overdue', 'pending'])) {
+            // Load compliance requirements for filtering
+            $vehicles = $query->with([
+                'complianceRequirements.complianceType',
+                'complianceRequirements.currentRecord'
+            ])->get();
+
+            $vehicles = $vehicles->filter(function($vehicle) use ($complianceFilter) {
+                switch ($complianceFilter) {
+                    case 'at_risk':
+                        // Match getFleetAtRisk logic: vehicles with at_risk, expired, or pending compliance_status
+                        return in_array($vehicle->compliance_status, ['at_risk', 'expired', 'pending']);
+
+                    case 'overdue':
+                        // Has at least one overdue requirement (expired status)
+                        $requirements = $vehicle->complianceRequirements;
+                        return $requirements->contains(function($req) {
+                            return $req->isOverdue();
+                        });
+
+                    case 'expiring':
+                        // Has at least one requirement expiring within 30 days (but not overdue)
+                        $requirements = $vehicle->complianceRequirements;
+                        return $requirements->contains(function($req) {
+                            $daysUntil = $req->getDaysUntilExpiry();
+                            return $daysUntil !== null && $daysUntil >= 0 && $daysUntil <= 30 && !$req->isOverdue();
+                        });
+
+                    case 'pending':
+                        // Match getStats logic: vehicles with pending compliance_status
+                        return $vehicle->compliance_status === 'pending';
+
+                    default:
+                        return true;
+                }
+            });
+
+            // Calculate stats from filtered collection
+            $total = $vehicles->count();
+            $active = $vehicles->where('status', 'active')->count();
+            $maintenance = $vehicles->where('status', 'maintenance')->count();
+            $inactive = $vehicles->where('status', 'inactive')->count();
+        } else {
+            // Calculate stats from query
+            $total = $query->count();
+            $active = (clone $query)->where('status', 'active')->count();
+            $maintenance = (clone $query)->where('status', 'maintenance')->count();
+            $inactive = (clone $query)->where('status', 'inactive')->count();
+        }
 
         return $this->successResponse([
             'total' => $total,

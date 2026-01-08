@@ -148,11 +148,13 @@ class ComplianceDashboardController extends ApiController
 
     /**
      * Get fleet at risk - vehicles with at_risk, expired, or pending compliance
-     * GET /api/compliance/dashboard/fleet-at-risk
+     * GET /api/compliance/dashboard/fleet-at-risk?page=1&limit=20
      */
     public function getFleetAtRisk(Request $request)
     {
         $user = $request->user();
+        $page = $request->input('page', 1);
+        $limit = $request->input('limit', 20);
 
         // Build base query
         $query = Vehicle::query();
@@ -160,6 +162,7 @@ class ComplianceDashboardController extends ApiController
             $query->where('tenant_id', $user->tenant_id);
         }
 
+        // Get all vehicles to filter by compliance status
         $vehicles = $query->with([
             'vehicleType',
             'complianceRequirements.complianceType',
@@ -186,7 +189,7 @@ class ComplianceDashboardController extends ApiController
                     'compliance_type' => $req->complianceType->name ?? 'Unknown',
                     'category' => $req->complianceType->category ?? 'Unknown',
                     'status' => $req->getCurrentStatus(),
-                    'days_until_expiry' => $req->getDaysUntilExpiry(),
+                    'days_until_expiry' => $req->getDaysUntilExpiry() ?? '0',
                     'expiry_date' => $req->currentRecord?->expiry_date?->format('Y-m-d'),
                     'is_required' => $req->is_required,
                 ];
@@ -204,9 +207,20 @@ class ComplianceDashboardController extends ApiController
             ];
         })->sortByDesc('problem_count')->values();
 
+        // Get total count before pagination
+        $total = $fleetAtRisk->count();
+
+        // Apply pagination
+        $offset = ($page - 1) * $limit;
+        $paginatedVehicles = $fleetAtRisk->slice($offset, $limit)->values();
+
         return $this->successResponse([
-            'total_at_risk' => $fleetAtRisk->count(),
-            'vehicles' => $fleetAtRisk,
+            'total_at_risk' => $total,
+            'current_page' => (int) $page,
+            'per_page' => (int) $limit,
+            'total_pages' => ceil($total / $limit),
+            'has_more' => $page < ceil($total / $limit),
+            'vehicles' => $paginatedVehicles,
         ], 'Fleet at risk retrieved successfully');
     }
 

@@ -64,7 +64,8 @@ class VehicleComplianceRequirement extends Model
         if (!$current || !$current->expiry_date) {
             return false;
         }
-        return $current->expiry_date->isPast();
+        // Item is overdue only if expiry date is before today (not including today)
+        return $current->expiry_date->startOfDay()->lt(now()->startOfDay());
     }
 
     // Get days until expiry
