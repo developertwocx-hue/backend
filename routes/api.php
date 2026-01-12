@@ -133,6 +133,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/expiring-soon', [ComplianceDashboardController::class, 'getExpiringSoon']);
         Route::get('/alerts', [ComplianceDashboardController::class, 'getAlerts']);
         Route::post('/alerts/{alertId}/acknowledge', [ComplianceDashboardController::class, 'acknowledgeAlert']);
+        Route::post('/alerts/mark-as-read', [ComplianceDashboardController::class, 'markAsRead']);
+        Route::post('/alerts/mark-all-as-read', [ComplianceDashboardController::class, 'markAllAsRead']);
+        Route::post('/alerts/clear-read', [ComplianceDashboardController::class, 'clearRead']);
         Route::get('/summary-by-category', [ComplianceDashboardController::class, 'getSummaryByCategory']);
     });
 });

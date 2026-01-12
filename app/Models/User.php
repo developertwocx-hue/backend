@@ -26,6 +26,7 @@ class User extends Authenticatable
         'google_id',
         'tenant_id',
         'role',
+        'read_compliance_alerts',
     ];
 
     /**
@@ -41,11 +42,12 @@ class User extends Authenticatable
     /**
      * The attributes that should be cast.
      *
-     * @var array<string, string> 
+     * @var array<string, string>
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'read_compliance_alerts' => 'array',
     ];
 
     /**

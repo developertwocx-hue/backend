@@ -71,6 +71,10 @@ class NovaServiceProvider extends NovaApplicationServiceProvider
                     ->path('/resources/vehicle-documents')
                     ->icon('document-text'),
 
+                \Laravel\Nova\Menu\MenuSection::make('Manage States')
+                    ->path('/resources/australian-states')
+                    ->icon('map'),
+
                 \Laravel\Nova\Menu\MenuSection::make('Compliance Types')
                     ->path('/resources/compliance-types')
                     ->icon('clipboard-document-check'),

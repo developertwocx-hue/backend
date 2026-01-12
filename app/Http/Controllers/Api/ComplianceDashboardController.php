@@ -279,65 +279,145 @@ class ComplianceDashboardController extends ApiController
     }
 
     /**
-     * Get active alerts for the tenant
+     * Get notification alerts for the tenant (Expiring Soon + Overdue)
      * GET /api/compliance/dashboard/alerts
+     * GET /api/compliance/dashboard/alerts?unread_only=true
      */
     public function getAlerts(Request $request)
     {
         $user = $request->user();
+        $unreadOnly = $request->boolean('unread_only', true); // Default to unread only
 
-        // Build base query
-        $query = ComplianceAlert::with([
-            'vehicle.vehicleType',
-            'complianceRecord.complianceType',
-            'acknowledgedBy'
-        ]);
+        // Refresh user to get latest read_compliance_alerts
+        $user->refresh();
 
+        // Build base query for vehicles
+        $query = Vehicle::query();
         if ($user->role !== 'superadmin') {
             $query->where('tenant_id', $user->tenant_id);
         }
 
-        // Filter by status if provided
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        } else {
-            // Default: show unacknowledged alerts
-            $query->unacknowledged();
+        $vehicles = $query->with([
+            'vehicleType',
+            'complianceRequirements.complianceType',
+            'complianceRequirements.currentRecord'
+        ])->get();
+
+        // Get user's read alert IDs
+        $readAlertIds = $user->read_compliance_alerts ?? [];
+
+        $notifications = [];
+
+        foreach ($vehicles as $vehicle) {
+            foreach ($vehicle->complianceRequirements as $requirement) {
+                $daysUntil = $requirement->getDaysUntilExpiry();
+
+                if ($daysUntil === null || !$requirement->currentRecord) {
+                    continue;
+                }
+
+                // Create notification ID (unique per vehicle-requirement)
+                $notificationId = "vehicle_{$vehicle->id}_requirement_{$requirement->id}";
+
+                // Skip if already read and user wants unread only
+                if ($unreadOnly && in_array($notificationId, $readAlertIds)) {
+                    continue;
+                }
+
+                $isRead = in_array($notificationId, $readAlertIds);
+                $currentRecord = $requirement->currentRecord;
+
+                // OVERDUE (Expired)
+                if ($daysUntil < 0) {
+                    $notifications[] = [
+                        'id' => $notificationId,
+                        'type' => 'overdue',
+                        'priority' => 'critical',
+                        'is_read' => $isRead,
+                        'vehicle' => [
+                            'id' => $vehicle->id,
+                            'registration_number' => $vehicle->registration_number,
+                            'make' => $vehicle->make,
+                            'model' => $vehicle->model,
+                            'type' => $vehicle->vehicleType->name ?? 'Unknown',
+                            'state' => $vehicle->state_of_operation,
+                        ],
+                        'compliance' => [
+                            'type_id' => $requirement->compliance_type_id,
+                            'type_name' => $requirement->complianceType->name ?? 'Unknown',
+                            'category' => $requirement->complianceType->category ?? 'Unknown',
+                            'requirement_id' => $requirement->id,
+                            'record_id' => $currentRecord->id,
+                        ],
+                        'expiry_date' => $currentRecord->expiry_date?->format('Y-m-d'),
+                        'days_overdue' => abs($daysUntil),
+                        'days_until_expiry' => $daysUntil,
+                        'message' => "{$vehicle->registration_number} - {$requirement->complianceType->name} is OVERDUE by " . abs($daysUntil) . " days",
+                        'created_at' => $currentRecord->updated_at->format('Y-m-d H:i:s'),
+                    ];
+                }
+                // EXPIRING SOON (Within 30 days)
+                elseif ($daysUntil >= 0 && $daysUntil <= 30) {
+                    $priority = 'low';
+                    if ($daysUntil <= 7) {
+                        $priority = 'high';
+                    } elseif ($daysUntil <= 14) {
+                        $priority = 'medium';
+                    }
+
+                    $notifications[] = [
+                        'id' => $notificationId,
+                        'type' => 'expiring_soon',
+                        'priority' => $priority,
+                        'is_read' => $isRead,
+                        'vehicle' => [
+                            'id' => $vehicle->id,
+                            'registration_number' => $vehicle->registration_number,
+                            'make' => $vehicle->make,
+                            'model' => $vehicle->model,
+                            'type' => $vehicle->vehicleType->name ?? 'Unknown',
+                            'state' => $vehicle->state_of_operation,
+                        ],
+                        'compliance' => [
+                            'type_id' => $requirement->compliance_type_id,
+                            'type_name' => $requirement->complianceType->name ?? 'Unknown',
+                            'category' => $requirement->complianceType->category ?? 'Unknown',
+                            'requirement_id' => $requirement->id,
+                            'record_id' => $currentRecord->id,
+                        ],
+                        'expiry_date' => $currentRecord->expiry_date?->format('Y-m-d'),
+                        'days_until_expiry' => $daysUntil,
+                        'message' => "{$vehicle->registration_number} - {$requirement->complianceType->name} expires in {$daysUntil} days",
+                        'created_at' => $currentRecord->updated_at->format('Y-m-d H:i:s'),
+                    ];
+                }
+            }
         }
 
-        // Filter by alert type if provided
-        if ($request->has('alert_type')) {
-            $query->where('alert_type', $request->alert_type);
-        }
+        // Sort: Critical first, then by days (overdue first, then expiring soonest)
+        $notifications = collect($notifications)->sortBy([
+            ['priority', 'desc'], // critical > high > medium > low
+            ['days_until_expiry', 'asc'], // negative (overdue) first, then ascending
+        ])->values();
 
-        $alerts = $query->latest()->get();
-
-        // Map to detailed format
-        $alertsData = $alerts->map(function ($alert) {
-            return [
-                'alert_id' => $alert->id,
-                'alert_type' => $alert->alert_type,
-                'status' => $alert->status,
-                'days_until_expiry' => $alert->days_until_expiry,
-                'vehicle' => [
-                    'id' => $alert->vehicle->id,
-                    'type' => $alert->vehicle->vehicleType->name ?? 'Unknown',
-                    'state' => $alert->vehicle->state_of_operation,
-                ],
-                'compliance_type' => $alert->complianceRecord?->complianceType?->name ?? 'Unknown',
-                'category' => $alert->complianceRecord?->complianceType?->category ?? 'unknown',
-                'expiry_date' => $alert->complianceRecord?->expiry_date?->format('Y-m-d'),
-                'sent_at' => $alert->sent_at?->format('Y-m-d H:i:s'),
-                'acknowledged_at' => $alert->acknowledged_at?->format('Y-m-d H:i:s'),
-                'acknowledged_by' => $alert->acknowledgedBy?->name,
-                'created_at' => $alert->created_at->format('Y-m-d H:i:s'),
-            ];
-        });
+        // Count by type and priority
+        $summary = [
+            'total' => $notifications->count(),
+            'unread' => $notifications->where('is_read', false)->count(),
+            'overdue' => $notifications->where('type', 'overdue')->count(),
+            'expiring_soon' => $notifications->where('type', 'expiring_soon')->count(),
+            'by_priority' => [
+                'critical' => $notifications->where('priority', 'critical')->count(),
+                'high' => $notifications->where('priority', 'high')->count(),
+                'medium' => $notifications->where('priority', 'medium')->count(),
+                'low' => $notifications->where('priority', 'low')->count(),
+            ],
+        ];
 
         return $this->successResponse([
-            'total_alerts' => $alertsData->count(),
-            'alerts' => $alertsData,
-        ], 'Alerts retrieved successfully');
+            'summary' => $summary,
+            'notifications' => $notifications,
+        ], 'Notifications retrieved successfully');
     }
 
     /**
@@ -421,6 +501,95 @@ class ComplianceDashboardController extends ApiController
         $alert->acknowledge($user->id);
 
         return $this->successResponse($alert, 'Alert acknowledged successfully');
+    }
+
+    /**
+     * Mark a single notification as read
+     * POST /api/compliance/dashboard/alerts/mark-as-read
+     */
+    public function markAsRead(Request $request)
+    {
+        $request->validate([
+            'notification_id' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $notificationId = $request->notification_id;
+
+        // Get current read alerts
+        $readAlerts = $user->read_compliance_alerts ?? [];
+
+        // Add to read list if not already there
+        if (!in_array($notificationId, $readAlerts)) {
+            $readAlerts[] = $notificationId;
+            $user->update(['read_compliance_alerts' => $readAlerts]);
+        }
+
+        return $this->successResponse([
+            'notification_id' => $notificationId,
+            'is_read' => true,
+        ], 'Notification marked as read');
+    }
+
+    /**
+     * Mark all notifications as read
+     * POST /api/compliance/dashboard/alerts/mark-all-as-read
+     */
+    public function markAllAsRead(Request $request)
+    {
+        $user = $request->user();
+
+        // Build base query for vehicles
+        $query = Vehicle::query();
+        if ($user->role !== 'superadmin') {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+
+        $vehicles = $query->with([
+            'complianceRequirements.complianceType',
+            'complianceRequirements.currentRecord'
+        ])->get();
+
+        // Collect all notification IDs
+        $allNotificationIds = [];
+
+        foreach ($vehicles as $vehicle) {
+            foreach ($vehicle->complianceRequirements as $requirement) {
+                $daysUntil = $requirement->getDaysUntilExpiry();
+
+                if ($daysUntil === null || !$requirement->currentRecord) {
+                    continue;
+                }
+
+                // Include overdue and expiring soon (within 30 days)
+                if ($daysUntil < 0 || ($daysUntil >= 0 && $daysUntil <= 30)) {
+                    $notificationId = "vehicle_{$vehicle->id}_requirement_{$requirement->id}";
+                    $allNotificationIds[] = $notificationId;
+                }
+            }
+        }
+
+        // Update user's read alerts with all notification IDs
+        $user->update(['read_compliance_alerts' => $allNotificationIds]);
+
+        return $this->successResponse([
+            'marked_count' => count($allNotificationIds),
+            'message' => 'All notifications marked as read',
+        ], 'All notifications marked as read successfully');
+    }
+
+    /**
+     * Clear all read notifications (reset read status)
+     * POST /api/compliance/dashboard/alerts/clear-read
+     */
+    public function clearRead(Request $request)
+    {
+        $user = $request->user();
+        $user->update(['read_compliance_alerts' => []]);
+
+        return $this->successResponse([
+            'message' => 'All read notifications cleared',
+        ], 'Read notifications cleared successfully');
     }
 
     /**

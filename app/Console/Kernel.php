@@ -12,7 +12,23 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Generate compliance alerts daily at 8:00 AM
+        $schedule->job(new \App\Jobs\GenerateComplianceAlerts())
+            ->dailyAt('08:00')
+            ->name('generate-compliance-alerts')
+            ->withoutOverlapping();
+
+        // Send compliance alerts every hour
+        $schedule->job(new \App\Jobs\SendComplianceAlerts())
+            ->hourly()
+            ->name('send-compliance-alerts')
+            ->withoutOverlapping();
+
+        // Recalculate vehicle compliance scores daily at 9:00 AM
+        $schedule->command('vehicles:recalculate-compliance')
+            ->dailyAt('09:00')
+            ->name('recalculate-compliance-scores')
+            ->withoutOverlapping();
     }
 
     /**
